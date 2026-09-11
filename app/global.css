@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f7fb;
+  --foreground: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* === TENANT THEMES === */
+/* Lemon Tree: yellow lemons, green leaves, blue sky */
+.theme-lemontree {
+  background:
+    radial-gradient(circle at 15% 20%, rgba(250, 204, 21, 0.25), transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(74, 222, 128, 0.20), transparent 45%),
+    linear-gradient(180deg, #bae6fd 0%, #e0f2fe 40%, #f0fdf4 100%);
+}
+.theme-lemontree header {
+  background: linear-gradient(90deg, #fef9c3, #dcfce7) !important;
+  border-bottom-color: #bbf7d0 !important;
+}
+.theme-lemontree ::selection {
+  background: #fde047;
+}
+
+/* Mash It: space theme */
+.theme-mashit {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.9) 0.5px, transparent 1px),
+    radial-gradient(circle at 60% 70%, rgba(255,255,255,0.7) 0.5px, transparent 1px),
+    radial-gradient(circle at 80% 30%, rgba(255,255,255,0.8) 0.5px, transparent 1px),
+    radial-gradient(circle at 40% 85%, rgba(255,255,255,0.6) 0.5px, transparent 1px),
+    radial-gradient(circle at 90% 60%, rgba(255,255,255,0.7) 0.5px, transparent 1px),
+    linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+  background-size: 200px 200px, 250px 250px, 300px 300px, 220px 220px, 280px 280px, 100% 100%;
+}
+.theme-mashit header {
+  background: rgba(15, 23, 42, 0.85) !important;
+  border-bottom-color: rgba(139, 92, 246, 0.3) !important;
+  backdrop-filter: blur(12px);
+}
+.theme-mashit h1,
+.theme-mashit .text-slate-900 {
+  color: #e0e7ff !important;
+}
