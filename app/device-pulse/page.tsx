@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { supabase } from "@/supabase/client"
+import { supabase } from "../../supabase/client"
 
 export default function DevicePulse() {
   const [devices, setDevices] = useState<any[]>([])
