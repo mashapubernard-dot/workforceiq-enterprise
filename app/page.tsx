@@ -51,6 +51,7 @@ import { supabase } from "../supabase/client";
 import OperationsControlPanel from "./OperationsControlPanel";
 import WorkforceIQSessionGuard from "./WorkforceIQSessionGuard";
 import IQCommandCenter from "./IQCommandCenter";
+import IQAutomationMachine from "./IQAutomationMachine";
  
 type Role =
   | "Administrator"
@@ -5039,6 +5040,15 @@ export default function Home() {
               </div>
  
               {/* SUMMARY */}
+              {profile && (
+                <IQAutomationMachine
+                  employees={employees}
+                  tickets={tickets}
+                  fieldWorkOrders={fieldWorkOrders}
+                  hrCases={hrCases}
+                />
+              )}
+
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                   <div className="flex items-center justify-between mb-5">
