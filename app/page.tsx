@@ -504,6 +504,25 @@ function getInitials(name: string) {
     .join("");
 }
  
+type AdvancedFeature = { id:number; name:string; icon:any; description:string; status:"Live foundation"|"Existing module" };
+const advancedFeatures: AdvancedFeature[] = [
+ {id:1,name:"GPS Live Field Map",icon:MapPin,description:"Live tenant-scoped workforce location tracking.",status:"Live foundation"},
+ {id:2,name:"Real Phone Integration",icon:PhoneCall,description:"Telephony provider connection and call-event foundation.",status:"Live foundation"},
+ {id:3,name:"Notifications",icon:Bell,description:"Rule-based in-app, email, WhatsApp, SMS and push notification foundation.",status:"Live foundation"},
+ {id:4,name:"Billing / Inventory / Revenue",icon:Receipt,description:"Billing transactions connected to customers and invoices.",status:"Live foundation"},
+ {id:5,name:"Accurate Pauses",icon:Clock3,description:"Status history and pause-duration tracking foundation.",status:"Existing module"},
+ {id:6,name:"Intelligent Scheduling",icon:CalendarDays,description:"Schedules plus forecast-aware workforce planning foundation.",status:"Existing module"},
+ {id:7,name:"Intraday Management",icon:Activity,description:"Live operational events and intervention tracking.",status:"Live foundation"},
+ {id:8,name:"Automation Intelligence",icon:Sparkles,description:"Tenant-scoped automation rules and execution metadata.",status:"Live foundation"},
+ {id:9,name:"Powerful Service-Level Reporting",icon:BarChart3,description:"Interval service-level, abandonment and AHT snapshots.",status:"Live foundation"},
+ {id:10,name:"Advanced Device Tracking",icon:HardDrive,description:"Tenant-scoped device/session tracking foundation.",status:"Existing module"},
+ {id:11,name:"Live Field Technician Tracking",icon:MapPin,description:"Mobile workforce sessions and GPS location foundation.",status:"Live foundation"},
+ {id:12,name:"Asset Lifecycle Management",icon:HardDrive,description:"Asset event history for assignment, movement and lifecycle changes.",status:"Existing module"},
+ {id:13,name:"Preventative Maintenance Management",icon:Wrench,description:"Recurring maintenance plans, due dates and ownership.",status:"Live foundation"},
+ {id:14,name:"Workforce Forecasting",icon:Activity,description:"Interval forecasts for volume, AHT, required and scheduled agents.",status:"Live foundation"},
+ {id:15,name:"Mobile Workforce Experience",icon:Users,description:"Mobile session, presence and field-workforce foundation.",status:"Live foundation"},
+];
+
 const analyticsRoadmapItems: { title: string; note: string }[] = [
   { title: "Sales / revenue", note: "Ready for sales data" },
   { title: "QA scores", note: "Ready for QA data" },
@@ -515,6 +534,8 @@ const analyticsRoadmapItems: { title: string; note: string }[] = [
   { title: "Field productivity", note: "Connected to work orders" },
 ];
  
+function AdvancedFeatureStrip(){return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between mb-4"><div><h3 className="text-lg font-black text-slate-900">WorkforceIQ Advanced Platform</h3><p className="text-sm text-slate-500">15-feature expansion foundation connected to the production backend.</p></div><span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">15 features</span></div><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{advancedFeatures.map(f=><div key={f.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex items-center gap-2"><f.icon size={17} className="text-red-600"/><span className="font-bold text-slate-800">{String(f.id).padStart(2,"0")} {f.name}</span></div><p className="mt-1 text-xs text-slate-500">{f.description}</p><span className="mt-2 inline-block text-[10px] font-bold text-emerald-700">{f.status}</span></div>)}</div></div>}
+
 function EmployeeCommentSection({
   tabName,
   profile,
@@ -4419,6 +4440,8 @@ export default function Home() {
           box-shadow: 0 0 10px rgba(74, 222, 128, 0.35) !important;
         }
       `}</style>
+      <AdvancedFeatureStrip />
+
       <WorkforceIQSessionGuard />
       {/* SIDEBAR */}
       {leftMenuOpen && (
