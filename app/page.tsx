@@ -6975,6 +6975,18 @@ export default function Home() {
                 </div>
               )}
  
+              {profile && (
+                <IQCommandCenter
+                  employees={employees}
+                  schedules={schedules}
+                  tickets={tickets}
+                  fieldWorkOrders={fieldWorkOrders}
+                  hrCases={hrCases}
+                  now={now}
+                  onNavigate={(tab) => setActiveTab(tab)}
+                />
+              )}
+
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-5">
@@ -9999,19 +10011,6 @@ export default function Home() {
             </div>
           )}
  
-          {/* IQ COMMAND CENTER */}
-          {activeTab === "Command Center" && profile && (
-            <IQCommandCenter
-              employees={employees}
-              schedules={schedules}
-              tickets={tickets}
-              fieldWorkOrders={fieldWorkOrders}
-              hrCases={hrCases}
-              now={now}
-              onNavigate={(tab) => setActiveTab(tab)}
-            />
-          )}
-
           {/* OTHER SECTIONS */}
           {activeTab !==
             "Dashboard" &&
