@@ -50,6 +50,7 @@ import {
 import { supabase } from "../supabase/client";
 import OperationsControlPanel from "./OperationsControlPanel";
 import WorkforceIQSessionGuard from "./WorkforceIQSessionGuard";
+import IQCommandCenter from "./IQCommandCenter";
  
 type Role =
   | "Administrator"
@@ -9998,6 +9999,19 @@ export default function Home() {
             </div>
           )}
  
+          {/* IQ COMMAND CENTER */}
+          {activeTab === "Command Center" && profile && (
+            <IQCommandCenter
+              employees={employees}
+              schedules={schedules}
+              tickets={tickets}
+              fieldWorkOrders={fieldWorkOrders}
+              hrCases={hrCases}
+              now={now}
+              onNavigate={(tab) => setActiveTab(tab)}
+            />
+          )}
+
           {/* OTHER SECTIONS */}
           {activeTab !==
             "Dashboard" &&
