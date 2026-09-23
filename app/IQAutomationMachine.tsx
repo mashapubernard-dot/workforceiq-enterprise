@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Bot, CheckCircle2, Clock3, FileText, Mail, Play, ShieldCheck, Sparkles, Target, UserRound, Workflow, XCircle } from "lucide-react";
 
 type Employee={id:string;name:string;role:string;status:string;clockInAt:string|null;statusStartedAt:string|null};
@@ -59,6 +59,6 @@ export default function IQAutomationMachine({employees,tickets,fieldWorkOrders,h
  </section>
 }
 
-function Module({icon,title,text:description,cards}:{icon:React.ReactNode;title:string;text:string;cards:string[]}){
+function Module({icon,title,text:description,cards}:{icon:ReactNode;title:string;text:string;cards:string[]}){
  return <div className="p-5 sm:p-6"><div className="flex items-center gap-3"><div className="rounded-xl bg-indigo-50 p-2 text-indigo-600">{icon}</div><div><h4 className="text-xl font-black">{title}</h4><p className="text-sm text-slate-500">{description}</p></div></div><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-6">{cards.map(c=><div key={c} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="font-black">{c}</div><div className="text-xs text-slate-500 mt-1">Module foundation ready for real data connections.</div></div>)}</div><div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><XCircle size={16} className="inline mr-2"/>No external action is executed from this screen yet.</div></div>
 }
