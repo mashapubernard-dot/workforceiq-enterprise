@@ -50,6 +50,9 @@ import {
 import { supabase } from "../supabase/client";
 import OperationsControlPanel from "./OperationsControlPanel";
 import WorkforceIQSessionGuard from "./WorkforceIQSessionGuard";
+import AdvancedWorkforcePlatform from "./AdvancedWorkforcePlatform";
+import IQCommandCenter from "./IQCommandCenter";
+import IQAutomationMachine from "./IQAutomationMachine";
  
 type Role =
   | "Administrator"
@@ -331,6 +334,18 @@ const allNavItems = [
     color: "from-teal-600 to-cyan-700",
     light: "bg-teal-50 text-teal-700 border-teal-200",
     iconBg: "bg-teal-100 text-teal-600",
+  },
+  {
+    name: "Advanced Platform",
+    icon: Sparkles,
+    roles: [
+      "Administrator",
+      "Supervisor",
+      "Team Leader",
+    ] as Role[],
+    color: "from-violet-600 to-fuchsia-700",
+    light: "bg-violet-50 text-violet-700 border-violet-200",
+    iconBg: "bg-violet-100 text-violet-600",
   },
   {
     name: "Command Center",
@@ -1040,9 +1055,13 @@ export default function Home() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem("workforceiq_favorite_tabs");
-      if (stored) setFavoriteTabs(JSON.parse(stored));
+      const current = stored ? JSON.parse(stored) : [];
+      const favorites = Array.isArray(current) ? current : [];
+      if (!favorites.includes("Advanced Platform")) favorites.push("Advanced Platform");
+      setFavoriteTabs(favorites);
+      window.localStorage.setItem("workforceiq_favorite_tabs", JSON.stringify(favorites));
     } catch {
-      // ignore malformed storage
+      setFavoriteTabs(["Advanced Platform"]);
     }
   }, []);
  
@@ -5061,6 +5080,15 @@ export default function Home() {
               </div>
  
               {/* SUMMARY */}
+              {profile && (
+                <IQAutomationMachine
+                  employees={employees}
+                  tickets={tickets}
+                  fieldWorkOrders={fieldWorkOrders}
+                  hrCases={hrCases}
+                />
+              )}
+
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                   <div className="flex items-center justify-between mb-5">
@@ -6875,6 +6903,11 @@ export default function Home() {
           )}
  
  
+          {/* ADVANCED WORKFORCE PLATFORM */}
+          {activeTab === "Advanced Platform" && (
+            <AdvancedWorkforcePlatform />
+          )}
+
           {/* COMMAND CENTER */}
           {activeTab === "Command Center" && (
             <div className="space-y-6">
@@ -6997,6 +7030,18 @@ export default function Home() {
                 </div>
               )}
  
+              {profile && (
+                <IQCommandCenter
+                  employees={employees}
+                  schedules={schedules}
+                  tickets={tickets}
+                  fieldWorkOrders={fieldWorkOrders}
+                  hrCases={hrCases}
+                  now={now}
+                  onNavigate={(tab) => setActiveTab(tab)}
+                />
+              )}
+
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-5">
