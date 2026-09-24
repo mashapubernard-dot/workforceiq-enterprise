@@ -1034,9 +1034,13 @@ export default function Home() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem("workforceiq_favorite_tabs");
-      if (stored) setFavoriteTabs(JSON.parse(stored));
+      const current = stored ? JSON.parse(stored) : [];
+      const favorites = Array.isArray(current) ? current : [];
+      if (!favorites.includes("Advanced Platform")) favorites.push("Advanced Platform");
+      setFavoriteTabs(favorites);
+      window.localStorage.setItem("workforceiq_favorite_tabs", JSON.stringify(favorites));
     } catch {
-      // ignore malformed storage
+      setFavoriteTabs(["Advanced Platform"]);
     }
   }, []);
  
