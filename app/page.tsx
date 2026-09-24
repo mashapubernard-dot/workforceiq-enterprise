@@ -50,6 +50,7 @@ import {
 import { supabase } from "../supabase/client";
 import OperationsControlPanel from "./OperationsControlPanel";
 import WorkforceIQSessionGuard from "./WorkforceIQSessionGuard";
+import AdvancedWorkforcePlatform from "./AdvancedWorkforcePlatform";
 import IQCommandCenter from "./IQCommandCenter";
 import IQAutomationMachine from "./IQAutomationMachine";
  
@@ -333,6 +334,18 @@ const allNavItems = [
     color: "from-teal-600 to-cyan-700",
     light: "bg-teal-50 text-teal-700 border-teal-200",
     iconBg: "bg-teal-100 text-teal-600",
+  },
+  {
+    name: "Advanced Platform",
+    icon: Sparkles,
+    roles: [
+      "Administrator",
+      "Supervisor",
+      "Team Leader",
+    ] as Role[],
+    color: "from-violet-600 to-fuchsia-700",
+    light: "bg-violet-50 text-violet-700 border-violet-200",
+    iconBg: "bg-violet-100 text-violet-600",
   },
   {
     name: "Command Center",
@@ -6863,6 +6876,11 @@ export default function Home() {
           )}
  
  
+          {/* ADVANCED WORKFORCE PLATFORM */}
+          {activeTab === "Advanced Platform" && (
+            <AdvancedWorkforcePlatform />
+          )}
+
           {/* COMMAND CENTER */}
           {activeTab === "Command Center" && (
             <div className="space-y-6">
