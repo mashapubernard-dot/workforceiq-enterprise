@@ -85,6 +85,24 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
     () => new Map(people.map((person) => [person.id, person])),
     [people]
   );
+  const deviceMap = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
+  const normalizedSearch = deviceSearch.trim().toLowerCase();
+  const deviceMatches = normalizedSearch
+    ? devices.filter((d) =>
+        [d.device_name, d.device_type, d.serial_number, d.mac_address, d.ip_address, d.location]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(normalizedSearch))
+      )
+    : [];
+  const filteredLocations = normalizedSearch
+    ? locations.filter((row) => {
+        const d = row.device_id ? deviceMap.get(row.device_id) : undefined;
+        const p = personMap.get(row.user_id);
+        return [d?.device_name, d?.device_type, d?.serial_number, d?.mac_address, d?.ip_address, d?.location, p?.full_name, p?.role]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(normalizedSearch));
+      })
+    : locations;
 
   const refreshLocations = useCallback(async () => {
     const { data, error } = await supabase
@@ -353,19 +371,6 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       }
     };
   }, []);
-
-  const deviceMap = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
-  const normalizedSearch = deviceSearch.trim().toLowerCase();
-  const deviceMatches = normalizedSearch ? devices.filter((d) =>
-    [d.device_name,d.device_type,d.serial_number,d.mac_address,d.ip_address,d.location].filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(normalizedSearch))
-  ) : [];
-  const filteredLocations = normalizedSearch ? locations.filter((row) => {
-    const d = row.device_id ? deviceMap.get(row.device_id) : undefined;
-    const p = personMap.get(row.user_id);
-    return [d?.device_name,d?.device_type,d?.serial_number,d?.mac_address,d?.ip_address,d?.location,p?.full_name,p?.role]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(normalizedSearch));
-  }) : locations;
 
   const liveCount = locations.filter(
     (row) => Date.now() - new Date(row.last_seen_at).getTime() <= 60000
