@@ -36,13 +36,13 @@ function verifySlackSignature(rawBody: string, timestamp: string | null, signatu
   }
 }
 
-async function askWorkforceIQ(question: string, slackUserId: string) {
+async function askWorkforceIQ(question: string, slackUserId: string, teamId: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return "I'm connected to WorkforceIQ, but OPENAI_API_KEY hasn't been configured yet.";
 
-  const user = await resolveWorkforceUser(slackUserId);
+  const user = await resolveWorkforceUser(slackUserId, teamId);
   if (!user) {
-    return "I couldn't securely link your Slack account to a WorkforceIQ account. Your Slack email must match your WorkforceIQ account email before I can show live workforce data.";
+    return "I couldn't securely link your Slack account to a WorkforceIQ account. Your Slack account is not linked to a WorkforceIQ user yet. An administrator must link this Slack user to the correct WorkforceIQ tenant before live data can be shown.";
   }
 
   const context = await getWorkforceContext(question, user);
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await slackApi("chat.postMessage", { channel: event.channel, text: "🤖 I'm checking WorkforceIQ…", thread_ts: event.ts });
-      const answer = await askWorkforceIQ(question, event.user || "unknown");
+      const answer = await askWorkforceIQ(question, event.user || "unknown", payload.team_id || "unknown");
       await slackApi("chat.postMessage", { channel: event.channel, text: answer, thread_ts: event.ts });
     } catch (error) {
       console.error("WorkforceIQ Slack error:", error);
