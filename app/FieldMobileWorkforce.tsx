@@ -50,7 +50,7 @@ export default function FieldMobileWorkforce({ profile, fieldWorkOrders }: Props
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [isInsideFence, setIsInsideFence] = useState<boolean | null>(null);
+
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const myOrders = useMemo(() => {
@@ -155,10 +155,8 @@ export default function FieldMobileWorkforce({ profile, fieldWorkOrders }: Props
     }
 
     if (nearest && nearest.distance > nearest.radius) {
-      setIsInsideFence(false);
       throw new Error("GPS fence check: you are " + Math.round(nearest.distance) + "m from " + nearest.name + ". The allowed radius is " + Math.round(nearest.radius) + "m.");
     }
-    setIsInsideFence(true);
     return position;
   }
 
