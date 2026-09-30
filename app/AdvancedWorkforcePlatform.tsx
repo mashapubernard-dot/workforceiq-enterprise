@@ -1,6 +1,6 @@
-import GPSLiveFieldMap from "./GPSLiveFieldMap";
-
 "use client";
+
+import GPSLiveFieldMap from "./GPSLiveFieldMap";
 
 import {
   Activity,
