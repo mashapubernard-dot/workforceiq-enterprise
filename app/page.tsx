@@ -1027,6 +1027,7 @@ export default function Home() {
     useState(Date.now());
  
   const [notifOpen, setNotifOpen] = useState(false);
+  const [commandCenterTab, setCommandCenterTab] = useState<"Overview" | "Controls" | "Integrations">("Overview");
  
   const [leftMenuOpen, setLeftMenuOpen] = useState(false);
   const [favoriteTabs, setFavoriteTabs] = useState<string[]>([]);
@@ -7073,7 +7074,24 @@ export default function Home() {
                 </div>
               )}
  
-              {profile && (
+              <div className="flex flex-wrap gap-2 rounded-2xl bg-white border border-slate-200 p-2 shadow-sm">
+                {([
+                  ["Overview", "Live operations"],
+                  ["Controls", "Feature controls"],
+                  ["Integrations", "Slack AI"],
+                ] as const).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setCommandCenterTab(tab)}
+                    className={`flex-1 min-w-[150px] rounded-xl px-4 py-3 text-sm font-black transition ${commandCenterTab === tab ? "bg-indigo-600 text-white shadow-md" : "text-slate-600 hover:bg-slate-100"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {commandCenterTab === "Overview" && profile && (
                 <IQCommandCenter
                   employees={employees}
                   schedules={schedules}
@@ -7083,6 +7101,78 @@ export default function Home() {
                   now={now}
                   onNavigate={(tab) => setActiveTab(tab)}
                 />
+              )}
+
+              {commandCenterTab === "Integrations" && (
+                <div className="space-y-6">
+                  <div className="rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-900 p-6 sm:p-8 text-white shadow-xl overflow-hidden relative">
+                    <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl" />
+                    <div className="relative">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-3 py-1.5 text-xs font-black uppercase tracking-wider">
+                        <Sparkles size={15} /> WorkforceIQ Integrations
+                      </div>
+                      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mt-4">
+                        <div>
+                          <h3 className="text-3xl sm:text-4xl font-black">Slack AI</h3>
+                          <p className="text-indigo-200 mt-2 max-w-2xl">
+                            Connect your Slack workspace to the live WorkforceIQ AI assistant. The bot can answer tenant-aware workforce questions from Slack without exposing another tenant&apos;s data.
+                          </p>
+                        </div>
+                        <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500/15 border border-emerald-400/30 px-4 py-3 text-emerald-200 font-black text-sm">
+                          <CheckCircle2 size={18} /> Backend endpoint installed
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-black">S</div>
+                        <div>
+                          <h4 className="text-lg font-black text-slate-900">Slack connection</h4>
+                          <p className="text-sm text-slate-500">Secure server-side connection</p>
+                        </div>
+                      </div>
+                      <div className="mt-6 space-y-3 text-sm">
+                        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="font-semibold text-slate-600">Events endpoint</span><span className="font-black text-emerald-600">READY</span></div>
+                        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="font-semibold text-slate-600">AI Responses</span><span className="font-black text-emerald-600">READY</span></div>
+                        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="font-semibold text-slate-600">Tenant protection</span><span className="font-black text-emerald-600">ENABLED</span></div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center"><Users size={20} /></div>
+                        <div>
+                          <h4 className="text-lg font-black text-slate-900">Slack user links</h4>
+                          <p className="text-sm text-slate-500">Map Slack identities to WorkforceIQ users</p>
+                        </div>
+                      </div>
+                      <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <div className="flex gap-3">
+                          <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+                          <div>
+                            <p className="font-black text-amber-900">No Slack identities linked yet</p>
+                            <p className="text-sm text-amber-800 mt-1">The bot is connected, but each Slack user must be securely linked to a WorkforceIQ employee before live workforce data can be returned.</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 text-xs text-slate-500">
+                        Next step: add the Slack User ID + workspace ID and select the matching WorkforceIQ employee. Secrets stay server-side.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
+                    <h4 className="text-lg font-black text-slate-900">What the bot can do</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
+                      {["Attendance & aux status", "Schedules & lateness", "Tickets & incidents", "Field activity"].map((item) => (
+                        <div key={item} className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm font-bold text-slate-700">{item}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
