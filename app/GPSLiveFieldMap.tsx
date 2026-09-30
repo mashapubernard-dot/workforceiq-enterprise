@@ -94,15 +94,28 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
           .some((v) => String(v).toLowerCase().includes(normalizedSearch))
       )
     : [];
-  const filteredLocations = normalizedSearch
-    ? locations.filter((row) => {
-        const d = row.device_id ? deviceMap.get(row.device_id) : undefined;
-        const p = personMap.get(row.user_id);
-        return [d?.device_name, d?.device_type, d?.serial_number, d?.mac_address, d?.ip_address, d?.location, p?.full_name, p?.role]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(normalizedSearch));
-      })
-    : locations;
+  const filteredLocations = useMemo(
+    () =>
+      normalizedSearch
+        ? locations.filter((row) => {
+            const d = row.device_id ? deviceMap.get(row.device_id) : undefined;
+            const p = personMap.get(row.user_id);
+            return [
+              d?.device_name,
+              d?.device_type,
+              d?.serial_number,
+              d?.mac_address,
+              d?.ip_address,
+              d?.location,
+              p?.full_name,
+              p?.role,
+            ]
+              .filter(Boolean)
+              .some((v) => String(v).toLowerCase().includes(normalizedSearch));
+          })
+        : locations,
+    [locations, deviceMap, personMap, normalizedSearch]
+  );
 
   const refreshLocations = useCallback(async () => {
     const { data, error } = await supabase
@@ -358,7 +371,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [locations, personMap, deviceMap, filteredLocations, currentUserId]);
+  }, [filteredLocations, personMap, deviceMap, currentUserId]);
 
   useEffect(() => {
     return () => {
