@@ -2420,117 +2420,175 @@ export default function Home() {
   ]);
  
   async function handleClockToggle() {
-    if (
-      !profile ||
-      clockActionLoading
-    ) {
-      return;
-    }
- 
-    setClockActionLoading(
-      true
-    );
- 
+    if (!profile || clockActionLoading) return;
+
+    setClockActionLoading(true);
     setClockError("");
- 
+
     try {
-      const currentEmployee =
-        employees.find(
-          (employee) =>
-            employee.id ===
-            profile.id
-        );
- 
-      if (
-        currentEmployee?.clockInAt
-      ) {
-        const {
-          error,
-        } =
-          await supabase
-            .from(
-              "attendance"
-            )
+      const currentEmployee = employees.find((employee) => employee.id === profile.id);
+      const isClockedIn = Boolean(currentEmployee?.clockInAt);
+
+      const getGpsPosition = () =>
+        new Promise<GeolocationPosition>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error("This device does not provide GPS location."));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            maximumAge: 10000,
+            timeout: 20000,
+          });
+        });
+
+      // Super Admin is the only role excluded from phone GPS tracking.
+      if (profile.role === "Super Admin") {
+        if (isClockedIn) {
+          const { error } = await supabase
+            .from("attendance")
             .update({
-              clock_out:
-                new Date().toISOString(),
-              status:
-                "Off Duty",
-              status_started_at:
-                null,
+              clock_out: new Date().toISOString(),
+              status: "Off Duty",
+              status_started_at: null,
             })
-            .eq(
-              "user_id",
-              profile.id
-            )
-            .is(
-              "clock_out",
-              null
-            );
- 
-        if (error) {
-          throw error;
-        }
- 
-        clearStoredStatusStartedAt(
-          profile.id
-        );
- 
-        setStatusStartedAt(
-          null
-        );
-      } else {
-        const {
-          error,
-        } =
-          await supabase
-            .from(
-              "attendance"
-            )
+            .eq("user_id", profile.id)
+            .is("clock_out", null);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from("attendance")
             .insert({
-              user_id:
-                profile.id,
-              clock_in:
-                new Date().toISOString(),
-              status:
-                "Working",
-              status_started_at:
-                null,
+              user_id: profile.id,
+              clock_in: new Date().toISOString(),
+              status: "Working",
+              status_started_at: null,
             });
- 
-        if (error) {
-          throw error;
+          if (error) throw error;
         }
- 
-        clearStoredStatusStartedAt(
-          profile.id
-        );
- 
-        setStatusStartedAt(
-          null
-        );
+        clearStoredStatusStartedAt(profile.id);
+        setStatusStartedAt(null);
+        await loadWorkforce(profile);
+        return;
       }
- 
-      await loadWorkforce(
-        profile
-      );
+
+      if (isClockedIn) {
+        let position: GeolocationPosition | null = null;
+        try {
+          position = await getGpsPosition();
+        } catch (gpsError) {
+          console.warn("Clock-out GPS unavailable; completing clock-out without GPS:", gpsError);
+        }
+
+        const updatePayload: Record<string, any> = {
+          clock_out: new Date().toISOString(),
+          status: "Off Duty",
+          status_started_at: null,
+        };
+
+        if (position) {
+          updatePayload.clock_out_latitude = position.coords.latitude;
+          updatePayload.clock_out_longitude = position.coords.longitude;
+          updatePayload.clock_out_accuracy_m = position.coords.accuracy ?? null;
+        }
+
+        const { error } = await supabase
+          .from("attendance")
+          .update(updatePayload)
+          .eq("user_id", profile.id)
+          .is("clock_out", null);
+
+        if (error) throw error;
+        clearStoredStatusStartedAt(profile.id);
+        setStatusStartedAt(null);
+      } else {
+        const position = await getGpsPosition();
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        const accuracy = position.coords.accuracy ?? null;
+
+        const { data: enforcedSites, error: siteError } = await supabase
+          .from("workforce_sites")
+          .select("id,name,latitude,longitude,radius_m,enabled,enforce_geofence")
+          .eq("enabled", true)
+          .eq("enforce_geofence", true);
+
+        if (siteError) throw siteError;
+
+        const toRadians = (value: number) => (value * Math.PI) / 180;
+        const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+          const earthRadius = 6371000;
+          const dLat = toRadians(lat2 - lat1);
+          const dLon = toRadians(lon2 - lon1);
+          const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRadians(lat1)) *
+              Math.cos(toRadians(lat2)) *
+              Math.sin(dLon / 2) ** 2;
+          return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        };
+
+        let matchedSite: any = null;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+
+        for (const site of enforcedSites ?? []) {
+          if (typeof site.latitude !== "number" || typeof site.longitude !== "number") continue;
+          const distance = distanceMeters(latitude, longitude, site.latitude, site.longitude);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            matchedSite = { ...site, distance };
+          }
+        }
+
+        if ((enforcedSites ?? []).length > 0 && !matchedSite) {
+          throw new Error("GPS sites are configured, but none has valid coordinates. Ask an administrator to configure the site.");
+        }
+
+        if (matchedSite && matchedSite.distance > Number(matchedSite.radius_m || 100)) {
+          throw new Error(
+            "Clock-in blocked: you are " +
+              Math.round(matchedSite.distance) +
+              "m from " +
+              matchedSite.name +
+              ". The allowed geo-fence is " +
+              Math.round(Number(matchedSite.radius_m || 100)) +
+              "m."
+          );
+        }
+
+        const { error } = await supabase
+          .from("attendance")
+          .insert({
+            user_id: profile.id,
+            clock_in: new Date().toISOString(),
+            status: "Working",
+            status_started_at: null,
+            clock_in_latitude: latitude,
+            clock_in_longitude: longitude,
+            clock_in_accuracy_m: accuracy,
+            clock_in_distance_m: matchedSite?.distance ?? null,
+            clock_in_geofence_status: matchedSite ? "INSIDE" : "NO_GEOFENCE_CONFIGURED",
+            clock_in_site_id: matchedSite?.id ?? null,
+          });
+
+        if (error) throw error;
+        clearStoredStatusStartedAt(profile.id);
+        setStatusStartedAt(null);
+      }
+
+      await loadWorkforce(profile);
     } catch (error: any) {
-      console.error(
-        "Clock action error:",
-        error
-      );
- 
+      console.error("Clock action error:", error);
       setClockError(
-        error?.message ??
-          "Unable to update attendance."
+        error?.code === 1
+          ? "GPS permission is required to clock in. Please allow location access for WorkforceIQ."
+          : error?.message ?? "Unable to update attendance."
       );
     } finally {
-      setClockActionLoading(
-        false
-      );
+      setClockActionLoading(false);
     }
   }
- 
+
   async function handleStatusToggle(
     newStatus: AttendanceStatus
   ) {
@@ -6882,8 +6940,15 @@ export default function Home() {
  
  
           {/* ADVANCED WORKFORCE PLATFORM */}
-          {activeTab === "Advanced Platform" && (
-            <AdvancedWorkforcePlatform />
+          {activeTab === "Advanced Platform" && profile && (
+            <AdvancedWorkforcePlatform
+              profile={{
+                id: profile.id,
+                full_name: profile.full_name,
+                role: profile.role,
+              }}
+              fieldWorkOrders={fieldWorkOrders}
+            />
           )}
 
           {/* COMMAND CENTER */}
@@ -9998,1227 +10063,3 @@ export default function Home() {
  
                           <div className="mt-4 divide-y divide-slate-100">
                             {people.map((person) => (
-                              <div
-                                key={person.id}
-                                className="py-3 flex items-center justify-between gap-3 flex-wrap"
-                              >
-                                <div>
-                                  <div className="font-bold text-slate-800">
-                                    {person.full_name}
-                                  </div>
-                                  <div className="text-xs text-slate-500">{person.role}</div>
-                                </div>
-                                <select
-                                  value={person.org_id ?? ""}
-                                  onChange={(e) =>
-                                    void reassignPersonOrg(person.id, e.target.value)
-                                  }
-                                  className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold"
-                                >
-                                  {organizations.map((o) => (
-                                    <option key={o.id} value={o.id}>
-                                      {o.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ))}
-                            {people.length === 0 && (
-                              <div className="py-6 text-center text-sm text-slate-400">
-                                No one assigned to this tenant yet.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
-              </div>
- 
-              <div className="text-[11px] text-slate-400">
-                Password resets and creating new logins for other people need a secure
-                server-side action (a Supabase Edge Function) and aren't available here yet —
-                see the note from when this was scoped.
-              </div>
-            </div>
-          )}
- 
-          {/* OTHER SECTIONS */}
-          {activeTab !==
-            "Dashboard" &&
-            activeTab !==
-              "Time & Attendance" &&
-            activeTab !==
-              "Schedules" &&
-            activeTab !==
-              "EOD Report" &&
-            activeTab !==
-              "Command Center" &&
-            activeTab !==
-              "Service Hub" &&
-            activeTab !==
-              "Field Operations" &&
-            activeTab !==
-              "HR Support" &&
-            activeTab !==
-              "Performance" &&
-            activeTab !==
-              "People" &&
-            activeTab !==
-              "Tasks" &&
-            activeTab !==
-              "Inventory" &&
-            activeTab !==
-              "Asset Management" &&
-            activeTab !==
-              "Knowledge Base" &&
-            activeTab !==
-              "Billing" &&
-            activeTab !==
-              "Tenant Management" && (
-              <div className="relative overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-sm p-8">
-                <div
-                  className={`absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b ${activeGradient}`}
-                />
- 
-                <div
-                  className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${activeGradient} flex items-center justify-center text-white shadow-lg`}
-                >
-                  {activeNav &&
-                    (() => {
-                      const Icon =
-                        activeNav.icon;
- 
-                      return (
-                        <Icon
-                          size={27}
-                        />
-                      );
-                    })()}
-                </div>
- 
-                <h3 className="text-2xl font-black text-slate-900 mt-5">
-                  {
-                    activeTab
-                  }
-                </h3>
- 
-                <p className="text-slate-500 mt-2 max-w-xl">
-                  This WorkforceIQ module is
-                  Ready for its next feature
-                  Set. Your navigation,
-                  Permissions and existing
-                  Functionality remain in
-                  Place.
-                </p>
- 
-                <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-50 border border-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
-                  <Sparkles
-                    size={16}
-                  />
-                  WorkforceIQ module
-                </div>
-              </div>
-            )}
-        </div>
-      </main>
- 
- 
-      {/* SERVICE HUB TICKET MODAL */}
-      {ticketModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-2xl bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden max-h-[92vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-red-600 to-orange-600 text-white p-5 flex items-center justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-wider font-black text-red-100">
-                  Service Hub
-                </div>
-                <h3 className="text-2xl font-black">Create Ticket</h3>
-<div className="text-xs font-black text-orange-100 mt-1">Incident number is assigned automatically when you create the ticket.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTicketModalOpen(false)}
-                className="h-10 w-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
-              >
-                <X size={20} />
-              </button>
-            </div>
- 
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  Request / Issue <span className="text-red-600">*</span>
-                </label>
-                <input
-                  value={ticketForm.title}
-                  onChange={(event) =>
-                    setTicketForm((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. Customer requires replacement part"
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
- 
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  Contact phone
-                </label>
-                <input
-                  value={ticketForm.contactPhone}
-                  onChange={(event) =>
-                    setTicketForm((current) => ({
-                      ...current,
-                      contactPhone: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. +27 82 123 4567"
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:ring-2 focus:ring-red-500"
-                />
-                <div className="text-xs text-slate-400 mt-1">
-                  Feeds the Dialer's call queue — leave blank if there's no number to call.
-                </div>
-              </div>
- 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Type
-                  </label>
-                  <select
-                    value={ticketForm.type}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        type: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option>Operations</option>
-                    <option>Call</option>
-                    <option>Incident</option>
-                    <option>Request</option>
- 
- 
-                    <option>Shipping</option>
-                    <option>Parts</option>
-                    <option>IT</option>
-                  </select>
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Priority
-                  </label>
-                  <select
-                    value={ticketForm.priority}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        priority:
-                          event.target.value as TicketPriority,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Critical</option>
-                  </select>
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Employee
-                  </label>
-                  <select
-                    value={ticketForm.employeeId}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        employeeId: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option value="">Not linked</option>
-                    {employees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Assigned To
-                  </label>
-                  <select
-                    value={ticketForm.assignee}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        assignee: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option value="">Unassigned</option>
-                    {employees
-                      .filter((employee) => employee.role !== "Employee")
-                      .map((employee) => (
-                        <option key={employee.id} value={employee.name}>
-                          {employee.name} • {employee.role}
-                        </option>
-                      ))}
-                  </select>
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Branch / Site
-                  </label>
-                  <input
-                    value={ticketForm.branch}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        branch: event.target.value,
-                      }))
-                    }
-                    placeholder="Branch or site"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Component
-                  </label>
-                  <input
-                    value={ticketForm.component}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        component: event.target.value,
-                      }))
-                    }
-                    placeholder="e.g. Router, Printer, Account, Application"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    SLA minutes
-                  </label>
-                  <input
-                    type="number"
-                    min="15"
-                    value={ticketForm.slaMinutes}
-                    onChange={(event) =>
-                      setTicketForm((current) => ({
-                        ...current,
-                        slaMinutes: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-              </div>
- 
-              <div>
-                <label className="text-sm font-black text-slate-700">
-<div>
-<label className="text-sm font-black text-slate-700">
-First Comment <span className="text-red-600">*</span>
-</label>
-<textarea
-rows={4}
-value={ticketForm.initialComment}
-onChange={(event) =>
-setTicketForm((current) => ({
-...current,
-initialComment: event.target.value,
-}))
-}
-placeholder="Required: record what was reported, requested, or done at ticket creation."
-className="mt-1 w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-3 resize-none outline-none focus:ring-2 focus:ring-red-500"
-/>
-<p className="mt-1 text-xs font-bold text-slate-500">
-This becomes the first entry in the permanent ticket conversation.
-</p>
-</div>
- 
-                  Notes
-                </label>
-                <textarea
-                  rows={5}
-                  value={ticketForm.notes}
-                  onChange={(event) =>
-                    setTicketForm((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Describe the request, customer information, part, model, quantity, shipping details, troubleshooting or other relevant notes."
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 resize-none outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-            </div>
- 
-            <div className="flex justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => setTicketModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={createTicket}
-                disabled={false}
-                className="rounded-xl bg-gradient-to-r from-red-600 to-orange-600 text-white px-5 py-3 font-black disabled:opacity-50"
-              >
-                Create Ticket
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
- 
-      {/* HR CASE MODAL */}
-      {hrCaseModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-xl bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white p-5 flex items-center justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-wider font-black text-rose-100">
-                  HR Support
-                </div>
-                <h3 className="text-2xl font-black">New HR Case</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setHrCaseModalOpen(false)}
-                className="h-10 w-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
-              >
-                <X size={20} />
-              </button>
-            </div>
- 
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  Employee
-                </label>
-                <select
-                  value={hrForm.employeeId}
-                  onChange={(event) =>
-                    setHrForm((current) => ({
-                      ...current,
-                      employeeId: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                >
-                  <option value="">Select employee</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
- 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Support Area
-                  </label>
-                  <select
-                    value={hrForm.category}
-                    onChange={(event) =>
-                      setHrForm((current) => ({
-                        ...current,
-                        category: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option>Employee Support</option>
-                    <option>Leave & Absence</option>
-                    <option>Employee Relations</option>
-                    <option>Onboarding</option>
-                    <option>Benefits & Remuneration</option>
-                    <option>Wellness</option>
-                    <option>Data Protection</option>
-                    <option>Employment Equity</option>
-                  </select>
-                </div>
- 
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Priority
-                  </label>
-                  <select
-                    value={hrForm.priority}
-                    onChange={(event) =>
-                      setHrForm((current) => ({
-                        ...current,
-                        priority:
-                          event.target.value as TicketPriority,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Critical</option>
-                  </select>
-                </div>
-              </div>
- 
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  Due Date
-                </label>
-                <input
-                  type="date"
-                  value={hrForm.dueDate}
-                  onChange={(event) =>
-                    setHrForm((current) => ({
-                      ...current,
-                      dueDate: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                />
-              </div>
- 
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  Notes
-                </label>
-                <textarea
-                  rows={5}
-                  value={hrForm.notes}
-                  onChange={(event) =>
-                    setHrForm((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Describe the employee support request."
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 resize-none"
-                />
-              </div>
-            </div>
- 
-            <div className="flex justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => setHrCaseModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={createHrCase}
-                disabled={!hrForm.employeeId}
-                className="rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 text-white px-5 py-3 font-black disabled:opacity-50"
-              >
-                Create HR Case
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
- 
-      {/* FIELD WORK ORDER MODAL */}
-      {fieldOrderModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-2xl bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden max-h-[92vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-sky-600 to-cyan-600 text-white p-5 flex items-center justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-wider font-black text-sky-100">
-                  Field Operations
-                </div>
-                <h3 className="text-2xl font-black">New Work Order</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFieldOrderModalOpen(false)}
-                className="h-10 w-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
-              >
-                <X size={20} />
-              </button>
-            </div>
- 
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Technician
-                  </label>
-                  <input
-                    value={fieldForm.technician}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        technician: event.target.value,
-                      }))
-                    }
-                    placeholder="Technician name"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Customer
-                  </label>
-                  <input
-                    value={fieldForm.customer}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        customer: event.target.value,
-                      }))
-                    }
-                    placeholder="Customer / account"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Site
-                  </label>
-                  <input
-                    value={fieldForm.site}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        site: event.target.value,
-                      }))
-                    }
-                    placeholder="Site / location"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Priority
-                  </label>
-                  <select
-                    value={fieldForm.priority}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        priority:
-                          event.target.value as TicketPriority,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  >
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Critical</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Part ID / Description
-                  </label>
-                  <input
-                    value={fieldForm.part}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        part: event.target.value,
-                      }))
-                    }
-                    placeholder="Part ID"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    Quantity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={fieldForm.quantity}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        quantity: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-black text-slate-700">
-                    ETA / Ship By
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={fieldForm.eta}
-                    onChange={(event) =>
-                      setFieldForm((current) => ({
-                        ...current,
-                        eta: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3"
-                  />
-                </div>
-              </div>
- 
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  First Comment <span className="text-red-600">*</span>
-                </label>
-                <textarea
-                  rows={4}
-                  value={ticketForm.initialComment}
-                  onChange={(event) =>
-                    setTicketForm((current) => ({
-                      ...current,
-                      initialComment: event.target.value,
-                    }))
-                  }
-                  placeholder="Required: record what was reported, requested, or done at ticket creation."
-                  className="mt-1 w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-3 resize-none outline-none focus:ring-2 focus:ring-red-500"
-                />
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  This becomes the first entry in the permanent ticket conversation.
-                </p>
-              </div>
- 
-              <div>
-                <label className="text-sm font-black text-slate-700">
-                  Notes
-                </label>
-                <textarea
-                  rows={4}
-                  value={fieldForm.notes}
-                  onChange={(event) =>
-                    setFieldForm((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Parts, shipping, model, customer contact, troubleshooting or other notes."
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3 resize-none"
-                />
-              </div>
-            </div>
- 
-            <div className="flex justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => setFieldOrderModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={createFieldWorkOrder}
-                disabled={
-                  !fieldForm.customer.trim() &&
-                  !fieldForm.site.trim() &&
-                  !fieldForm.technician.trim()
-                }
-                className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-600 text-white px-5 py-3 font-black disabled:opacity-50"
-              >
-                Create Work Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
- 
-      {/* SCHEDULE MODAL */}
-      {scheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-gradient-to-r from-orange-50 to-rose-50">
-              <div>
-                <div className="flex items-center gap-2 text-orange-600 text-xs font-bold uppercase tracking-wider">
-                  <CalendarDays
-                    size={14}
-                  />
-                  schedule Manager
-                </div>
- 
-                <h3 className="text-xl font-black text-slate-900 mt-1">
-                  {editingSchedule
-                    ? "Edit Schedule"
-                    : "Create Schedule"}
-                </h3>
- 
-                <p className="text-sm text-slate-500 mt-1">
-                  {editingSchedule
-                    ? "Update the employee's schedule."
-                    : "Create a new employee schedule."}
-                </p>
-              </div>
- 
-              <button
-                type="button"
-                onClick={
-                  closeScheduleModal
-                }
-                className="p-2 hover:bg-white rounded-xl"
-              >
-                <X
-                  size={20}
-                />
-              </button>
-            </div>
- 
-            <div className="p-5 space-y-4">
-              {scheduleError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-                  {
-                    scheduleError
-                  }
-                </div>
-              )}
- 
-              <div>
-                <label className="block text-sm font-bold mb-1 text-slate-700">
-                  employee
-                </label>
- 
-                <select
-                  value={
-                    scheduleForm.user_id
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setScheduleForm(
-                      (
-                        current
-                      ) => ({
-                        ...current,
-                        user_id:
-                          event
-                            .target
-                            .value,
-                      })
-                    )
-                  }
-                  disabled={
-                    !canCreateSchedule &&
-                    !!editingSchedule
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-orange-500"
-                >
-                  <option value="">
-                    Select employee
-                  </option>
- 
-                  {employees.map(
-                    (
-                      employee
-                    ) => (
-                      <option
-                        key={
-                          employee.id
-                        }
-                        value={
-                          employee.id
-                        }
-                      >
-                        {
-                          employee.name
-                        }{" "}
-                        —{" "}
-                        {
-                          employee.role
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
- 
-              {editingSchedule ? (
-                <div>
-                  <label className="block text-sm font-bold mb-1 text-slate-700">
-                    Date
-                  </label>
- 
-                  <input
-                    type="date"
-                    value={
-                      scheduleForm.start_date
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setScheduleForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          start_date:
-                            event
-                              .target
-                              .value,
-                          end_date:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold mb-1 text-slate-700">
-                      start Date
-                    </label>
- 
-                    <input
-                      type="date"
-                      value={
-                        scheduleForm.start_date
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setScheduleForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            start_date:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-500 outline-none"
-                    />
-                  </div>
- 
-                  <div>
-                    <label className="block text-sm font-bold mb-1 text-slate-700">
-                      end Date
-                    </label>
- 
-                    <input
-                      type="date"
-                      min={
-                        scheduleForm.start_date ||
-                        undefined
-                      }
-                      value={
-                        scheduleForm.end_date
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setScheduleForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            end_date:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-500 outline-none"
-                    />
-                  </div>
-                </div>
-              )}
- 
-              {!editingSchedule && (
-                <>
-                  <p className="text-xs text-slate-500 -mt-2">
-                    This creates the same
-                    Shift for every day from
-                    The start date through the
-                    end date.
-                  </p>
- 
-                  <label className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={
-                        scheduleForm.repeat_two_days_off
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setScheduleForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            repeat_two_days_off:
-                              event
-                                .target
-                                .checked,
-                          })
-                        )
-                      }
-                      className="h-4 w-4 accent-blue-600"
-                    />
- 
-                    <span>
-                      <span className="block font-bold text-blue-900">
-                        Repeat shift: 1 work
-                        Day + 2 days off
-                      </span>
- 
-                      <span className="block text-xs text-blue-700 mt-1">
-                        The shift repeats every
-                        3 days until the End
-                        Date.
-                      </span>
-                    </span>
-                  </label>
-                </>
-              )}
- 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold mb-1 text-slate-700">
-                    start Time
-                  </label>
- 
-                  <input
-                    type="time"
-                    value={
-                      scheduleForm.start_time
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setScheduleForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          start_time:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
- 
-                <div>
-                  <label className="block text-sm font-bold mb-1 text-slate-700">
-                    end Time
-                  </label>
- 
-                  <input
-                    type="time"
-                    value={
-                      scheduleForm.end_time
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setScheduleForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          end_time:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-              </div>
- 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold mb-1 text-slate-700">
-                    scheduled Break Minutes
-                  </label>
- 
-                  <input
-                    type="number"
-                    min="15"
-                    value={
-                      scheduleForm.break_minutes
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setScheduleForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          break_minutes:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
- 
-                <div>
-                  <label className="block text-sm font-bold mb-1 text-slate-700">
-                    Shift Type
-                  </label>
- 
-                  <select
-                    value={
-                      scheduleForm.shift_type
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setScheduleForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          shift_type:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:ring-2 focus:ring-orange-500 outline-none"
-                  >
-                    <option>
-                      Regular
-                    </option>
-                    <option>
-                      Early Shift
-                    </option>
-                    <option>
-                      late Shift
-                    </option>
-                    <option>
-                      Night Shift
-                    </option>
-                    <option>
-                      Training
-                    </option>
-                    <option>
-                      Overtime
-                    </option>
-                    <option>
-                      Off
-                    </option>
-                  </select>
-                </div>
-              </div>
- 
-              <div>
-                <label className="block text-sm font-bold mb-1 text-slate-700">
-                  notes
-                </label>
- 
-                <textarea
-                  value={
-                    scheduleForm.notes
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setScheduleForm(
-                      (
-                        current
-                      ) => ({
-                        ...current,
-                        notes:
-                          event
-                            .target
-                            .value,
-                      })
-                    )
-                  }
-                  rows={3}
-                  placeholder="Optional notes..."
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 resize-none focus:ring-2 focus:ring-orange-500 outline-none"
-                />
-              </div>
-            </div>
- 
-            <div className="flex justify-end gap-3 p-5 border-t border-slate-200 bg-slate-50">
-              <button
-                type="button"
-                onClick={
-                  closeScheduleModal
-                }
-                disabled={
-                  savingSchedule
-                }
-                className="px-4 py-2.5 border border-slate-200 bg-white rounded-xl hover:bg-slate-100 font-semibold"
-              >
-                Cancel
-              </button>
- 
-              <button
-                type="button"
-                onClick={
-                  handleSaveSchedule
-                }
-                disabled={
-                  savingSchedule
-                }
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-rose-600 text-white rounded-xl hover:shadow-lg font-bold disabled:opacity-50"
-              >
-                {savingSchedule && (
-                  <Loader2
-                    size={18}
-                    className="animate-spin"
-                  />
-                )}
- 
-                {editingSchedule
-                  ? "Save Changes"
-                  : "Create Schedule"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
