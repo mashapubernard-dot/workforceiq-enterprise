@@ -28,6 +28,7 @@ settings:
     bot_events:
       - app_mention
       - message.im
+      - app_home_opened
   interactivity:
     is_enabled: false
   org_deploy_enabled: false
