@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, LocateFixed, MapPin, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { Activity, LocateFixed, MapPin, RefreshCw, Search, ShieldCheck, Smartphone, Wifi } from "lucide-react";
 import { supabase } from "../supabase/client";
 
 declare global {
@@ -20,7 +20,9 @@ type LocationRow = {
   status: string;
   platform: string | null;
   battery_percent: number | null;
+  device_id: string | null;
 };
+type Device = { id:string; device_name:string; device_type:string|null; serial_number:string|null; assigned_user:string|null; status:string|null; location:string|null; org_id:string; mac_address:string|null; ip_address:string|null; };
 
 type Person = {
   id: string;
@@ -67,7 +69,10 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   const markersRef = useRef<Record<string, any>>({});
   const watchIdRef = useRef<number | null>(null);
   const [locations, setLocations] = useState<LocationRow[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [deviceSearch, setDeviceSearch] = useState("");
+  const [deviceSearchError, setDeviceSearchError] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -84,7 +89,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   const refreshLocations = useCallback(async () => {
     const { data, error } = await supabase
       .from("mobile_workforce_sessions")
-      .select("id,user_id,org_id,last_latitude,last_longitude,last_seen_at,status,platform,battery_percent")
+      .select("id,user_id,org_id,device_id,last_latitude,last_longitude,last_seen_at,status,platform,battery_percent")
       .not("last_latitude", "is", null)
       .not("last_longitude", "is", null)
       .order("last_seen_at", { ascending: false })
@@ -101,6 +106,13 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       if (!newestByUser.has(row.user_id)) newestByUser.set(row.user_id, row);
     });
     setLocations(Array.from(newestByUser.values()));
+  }, []);
+
+  const refreshDevices = useCallback(async () => {
+    const { data, error } = await supabase.from("devices")
+      .select("id,device_name,device_type,serial_number,assigned_user,status,location,org_id,mac_address,ip_address")
+      .order("device_name", { ascending: true }).limit(500);
+    if (!error) setDevices((data ?? []) as Device[]);
   }, []);
 
   const upsertCurrentLocation = useCallback(async (position: GeolocationPosition) => {
@@ -187,6 +199,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       }
 
       await refreshLocations();
+      await refreshDevices();
 
       const { data: attendance } = await supabase
         .from("attendance")
@@ -208,7 +221,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [refreshLocations]);
+  }, [refreshLocations, refreshDevices]);
 
   useEffect(() => {
     const channel = supabase
@@ -285,12 +298,14 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
         Object.values(markersRef.current).forEach((marker: any) => marker.remove());
         markersRef.current = {};
 
-        const valid = locations.filter(
+        const valid = filteredLocations.filter(
           (row) => typeof row.last_latitude === "number" && typeof row.last_longitude === "number"
         );
 
         valid.forEach((row) => {
           const name = personMap.get(row.user_id)?.full_name ?? "Technician";
+          const device = row.device_id ? deviceMap.get(row.device_id) : undefined;
+          const markerKey = row.device_id ?? row.user_id;
           const marker = L.circleMarker([row.last_latitude, row.last_longitude], {
             radius: row.user_id === currentUserId ? 10 : 8,
             weight: 3,
@@ -302,9 +317,9 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
           const state = ageSeconds <= 60 ? "Live" : ageSeconds <= 180 ? "Recent" : "Stale";
 
           marker.bindPopup(
-            `<div style="min-width:190px"><strong>${name}</strong><br/>Status: ${row.status ?? "Online"}<br/>Signal: ${state}<br/>Last update: ${new Date(row.last_seen_at).toLocaleTimeString()}<br/>Accuracy/device data is reported by the mobile browser.</div>`
+            `<div style="min-width:220px"><strong>${name}</strong><br/>Device: ${device?.device_name ?? "Unregistered device"}<br/>MAC: ${device?.mac_address ?? "—"}<br/>IP: ${device?.ip_address ?? "—"}<br/>Status: ${row.status ?? "Online"}<br/>Signal: ${state}<br/>Last GPS ping: ${new Date(row.last_seen_at).toLocaleTimeString()}</div>`
           );
-          markersRef.current[row.user_id] = marker;
+          markersRef.current[markerKey] = marker;
         });
 
         if (valid.length === 1) {
@@ -335,6 +350,19 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       }
     };
   }, []);
+
+  const deviceMap = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
+  const normalizedSearch = deviceSearch.trim().toLowerCase();
+  const deviceMatches = normalizedSearch ? devices.filter((d) =>
+    [d.device_name,d.device_type,d.serial_number,d.mac_address,d.ip_address,d.location].filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(normalizedSearch))
+  ) : [];
+  const filteredLocations = normalizedSearch ? locations.filter((row) => {
+    const d = row.device_id ? deviceMap.get(row.device_id) : undefined;
+    const p = personMap.get(row.user_id);
+    return [d?.device_name,d?.device_type,d?.serial_number,d?.mac_address,d?.ip_address,d?.location,p?.full_name,p?.role]
+      .filter(Boolean).some((v) => String(v).toLowerCase().includes(normalizedSearch));
+  }) : locations;
 
   const liveCount = locations.filter(
     (row) => Date.now() - new Date(row.last_seen_at).getTime() <= 60000
@@ -390,6 +418,32 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
         </div>
       )}
 
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm">
+        <div className="flex items-center gap-2 font-black text-indigo-950"><Search size={17}/>Find a device on the live map</div>
+        <p className="text-xs text-indigo-800 mt-1">Search a registered device name, serial, MAC address or IP address. If it has a GPS session, the map jumps to its latest ping.</p>
+        <div className="mt-3 flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1"><Search size={16} className="absolute left-3 top-3 text-slate-400"/>
+            <input value={deviceSearch} onChange={(e)=>{setDeviceSearch(e.target.value);setDeviceSearchError("");}} placeholder="MAC, IP, serial or device name…" className="w-full rounded-xl border border-indigo-200 bg-white pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300"/>
+          </div>
+          <button type="button" onClick={()=>{
+            const target=filteredLocations[0];
+            if(target?.last_latitude!=null && target.last_longitude!=null && mapRef.current){
+              mapRef.current.setView([target.last_latitude,target.last_longitude],17);
+              markersRef.current[target.device_id ?? target.user_id]?.openPopup();
+              setDeviceSearchError("");
+            } else if(deviceMatches.length) setDeviceSearchError("Device found, but there is no GPS ping for this device yet.");
+            else if(normalizedSearch) setDeviceSearchError("No registered device matched that MAC, IP, serial or name.");
+          }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white px-4 py-2.5 text-sm font-black hover:bg-indigo-700"><MapPin size={16}/>Find on map</button>
+        </div>
+        {normalizedSearch && deviceMatches.length>0 && <div className="mt-3 flex flex-wrap gap-2">{deviceMatches.slice(0,8).map((d)=><button key={d.id} type="button" onClick={()=>{
+          const loc=locations.find((x)=>x.device_id===d.id);
+          if(loc?.last_latitude!=null && loc.last_longitude!=null && mapRef.current){mapRef.current.setView([loc.last_latitude,loc.last_longitude],17);markersRef.current[d.id]?.openPopup();setDeviceSearchError("");}
+          else setDeviceSearchError(d.device_name+" is registered, but has no current GPS ping.");
+        }} className="rounded-lg bg-white border border-indigo-200 px-3 py-2 text-left text-xs hover:bg-indigo-100"><div className="font-black text-slate-800">{d.device_name}</div><div className="text-slate-500">{d.mac_address ?? "No MAC"} · {d.ip_address ?? "No IP"}</div></button>)}</div>}
+        {deviceSearchError && <div className="mt-2 text-xs font-bold text-amber-800">{deviceSearchError}</div>}
+        <div className="mt-3 text-[11px] text-indigo-700 flex items-start gap-2"><Wifi size={14} className="mt-0.5 shrink-0"/>MAC/IP are identifiers. Exact map position comes from the device GPS ping; an IP address alone cannot provide an exact physical location.</div>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_330px] gap-5">
         <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
           <div ref={mapHostRef} className="h-[420px] sm:h-[520px] w-full bg-slate-100" />
@@ -413,7 +467,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
             </div>
           ) : (
             <div className="space-y-2 max-h-[470px] overflow-auto">
-              {locations.map((row) => {
+              {filteredLocations.map((row) => {
                 const person = personMap.get(row.user_id);
                 const ageSeconds = Math.max(0, Math.round((Date.now() - new Date(row.last_seen_at).getTime()) / 1000));
                 const live = ageSeconds <= 60;
@@ -425,7 +479,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
                     onClick={() => {
                       if (mapRef.current && row.last_latitude != null && row.last_longitude != null) {
                         mapRef.current.setView([row.last_latitude, row.last_longitude], 16);
-                        markersRef.current[row.user_id]?.openPopup();
+                        markersRef.current[row.device_id ?? row.user_id]?.openPopup();
                       }
                     }}
                     className="w-full text-left rounded-xl border border-slate-200 p-3 hover:bg-sky-50 hover:border-sky-200 transition"
