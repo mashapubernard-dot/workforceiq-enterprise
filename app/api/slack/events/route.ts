@@ -132,6 +132,50 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (event.type === "app_home_opened") {
+    try {
+      await slackApi("views.publish", {
+        user_id: event.user,
+        view: {
+          type: "home",
+          blocks: [
+            {
+              type: "header",
+              text: { type: "plain_text", text: "🤖 WorkforceIQ AI" },
+            },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: "Your AI workforce assistant is ready. Ask questions about WorkforceIQ, workforce operations, reports, schedules, attendance, tickets and more.",
+              },
+            },
+            { type: "divider" },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: "*Try asking:*\n• “What can WorkforceIQ do?”\n• “Explain today's attendance report”\n• “Help me plan my team's day”\n• “How do I handle an HR case?”",
+              },
+            },
+            {
+              type: "context",
+              elements: [
+                {
+                  type: "mrkdwn",
+                  text: "WorkforceIQ AI • Secure server-side AI • Tenant-aware architecture",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    } catch (error) {
+      console.error("WorkforceIQ Slack Home error:", error);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (event.type === "app_mention" || (event.type === "message" && event.channel_type === "im")) {
     const text = cleanMention(event.text || "");
     if (!text) {
