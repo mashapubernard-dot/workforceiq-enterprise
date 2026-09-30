@@ -139,8 +139,11 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       return;
     }
 
+    const { data: assignedDevice } = await supabase.from("devices").select("id").eq("assigned_user", currentUserId).eq("org_id", orgId).limit(1).maybeSingle();
+
     const payload = {
       user_id: currentUserId,
+      device_id: assignedDevice?.id ?? null,
       org_id: orgId,
       last_latitude: latitude,
       last_longitude: longitude,
@@ -337,7 +340,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [locations, personMap, currentUserId]);
+  }, [locations, personMap, deviceMap, filteredLocations, currentUserId]);
 
   useEffect(() => {
     return () => {
