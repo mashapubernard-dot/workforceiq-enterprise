@@ -10063,3 +10063,30 @@ export default function Home() {
  
                           <div className="mt-4 divide-y divide-slate-100">
                             {people.map((person) => (
+                              <div key={person.id} className="py-4 flex items-center justify-between gap-4">
+                                <div className="min-w-0">
+                                  <div className="font-black text-slate-800 truncate">
+                                    {person.full_name || person.email || "Unnamed user"}
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    {person.email || "No email"} • {person.role || "Employee"}
+                                  </div>
+                                </div>
+                                <div className="text-xs font-bold text-slate-400">
+                                  {person.status || "Active"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+}
