@@ -50,6 +50,7 @@ export default function FieldMobileWorkforce({ profile, fieldWorkOrders }: Props
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [isInsideFence, setIsInsideFence] = useState<boolean | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const myOrders = useMemo(() => {
@@ -120,6 +121,47 @@ export default function FieldMobileWorkforce({ profile, fieldWorkOrders }: Props
     return () => { void supabase.removeChannel(channel); };
   }, [loadPhotos]);
 
+  async function verifyJobLocation(order: FieldWorkOrder) {
+    if (!navigator.geolocation) throw new Error("This phone does not provide GPS location.");
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 20000,
+      });
+    });
+
+    const { data: sites, error } = await supabase
+      .from("workforce_sites")
+      .select("id,name,latitude,longitude,radius_m,enabled,enforce_geofence")
+      .eq("enabled", true)
+      .eq("enforce_geofence", true);
+    if (error) throw error;
+
+    const rad = (v: number) => (v * Math.PI) / 180;
+    const distance = (a: number, b: number, c: number, d: number) => {
+      const R = 6371000;
+      const dl = rad(c - a);
+      const dn = rad(d - b);
+      const x = Math.sin(dl / 2) ** 2 + Math.cos(rad(a)) * Math.cos(rad(c)) * Math.sin(dn / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+    };
+
+    let nearest: { name: string; distance: number; radius: number } | null = null;
+    for (const site of sites ?? []) {
+      if (typeof site.latitude !== "number" || typeof site.longitude !== "number") continue;
+      const d = distance(position.coords.latitude, position.coords.longitude, site.latitude, site.longitude);
+      if (!nearest || d < nearest.distance) nearest = { name: site.name, distance: d, radius: Number(site.radius_m || 100) };
+    }
+
+    if (nearest && nearest.distance > nearest.radius) {
+      setIsInsideFence(false);
+      throw new Error("GPS fence check: you are " + Math.round(nearest.distance) + "m from " + nearest.name + ". The allowed radius is " + Math.round(nearest.radius) + "m.");
+    }
+    setIsInsideFence(true);
+    return position;
+  }
+
   async function captureAndUpload(order: FieldWorkOrder, photoType: "before" | "after", file: File) {
     if (profile.role === "Super Admin") return;
     if (!orgId) {
@@ -131,15 +173,7 @@ export default function FieldMobileWorkforce({ profile, fieldWorkOrders }: Props
     setMessage("");
 
     try {
-      if (!navigator.geolocation) throw new Error("This phone does not provide GPS location.");
-
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          maximumAge: 10000,
-          timeout: 20000,
-        });
-      });
+      const position = await verifyJobLocation(order);
 
       const { data: device } = await supabase
         .from("devices")
