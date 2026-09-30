@@ -1,3 +1,5 @@
+import GPSLiveFieldMap from "./GPSLiveFieldMap";
+
 "use client";
 
 import {
@@ -44,6 +46,7 @@ const features: AdvancedFeature[] = [
 export default function AdvancedWorkforcePlatform() {
   return (
     <div className="space-y-6">
+      <GPSLiveFieldMap />
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-900 p-6 sm:p-8 text-white shadow-xl">
         <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl" />
         <div className="absolute -left-20 -bottom-24 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
