@@ -31,20 +31,33 @@ async function slackApi(method: string, body: Record<string, unknown>) {
   return data;
 }
 
-export async function resolveWorkforceUser(slackUserId: string): Promise<WorkforceUser | null> {
+export async function resolveWorkforceUser(slackUserId: string, teamId: string): Promise<WorkforceUser | null> {
   const supabase = getSupabaseAdmin();
-  const slackUser = await slackApi("users.info", { user: slackUserId });
-  const email = slackUser?.user?.profile?.email?.trim()?.toLowerCase();
-  if (!email) throw new Error("Slack email unavailable. Add users:read and users:read.email, then reinstall the app.");
 
-  const { data, error } = await supabase
+  const { data: link, error: linkError } = await supabase
+    .from("workforce_slack_identity")
+    .select("workforce_user,org_id,enabled")
+    .eq("slack_team", teamId)
+    .eq("slack_user", slackUserId)
+    .eq("enabled", true)
+    .maybeSingle();
+
+  if (linkError) throw linkError;
+  if (!link) return null;
+
+  const { data: profile, error } = await supabase
     .from("user_profiles")
     .select("id,full_name,role,email,org_id,organization_id,tenant_id")
-    .ilike("email", email)
+    .eq("id", link.workforce_user)
     .maybeSingle();
 
   if (error) throw error;
-  return data ? (data as WorkforceUser) : null;
+  if (!profile) return null;
+
+  const profileOrg = profile.org_id || profile.organization_id || profile.tenant_id;
+  if (profileOrg !== link.org_id) return null;
+
+  return profile as WorkforceUser;
 }
 
 function orgIdFor(user: WorkforceUser) {
