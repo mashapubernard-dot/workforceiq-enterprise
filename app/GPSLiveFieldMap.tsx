@@ -74,6 +74,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   const [deviceSearch, setDeviceSearch] = useState("");
   const [deviceSearchError, setDeviceSearchError] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [tracking, setTracking] = useState(false);
   const [gpsPermission, setGpsPermission] = useState<"unknown" | "granted" | "denied">("unknown");
@@ -147,7 +148,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   }, []);
 
   const upsertCurrentLocation = useCallback(async (position: GeolocationPosition) => {
-    if (!currentUserId || !orgId) return;
+    if (!currentUserId || !orgId || currentUserRole === "Super Admin") return;
 
     const latitude = position.coords.latitude;
     const longitude = position.coords.longitude;
@@ -192,6 +193,19 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       return;
     }
 
+    const locationInsert = await supabase.from("workforce_locations").insert({
+      org_id: orgId,
+      user_id: currentUserId,
+      latitude,
+      longitude,
+      accuracy_meters: position.coords.accuracy ?? null,
+      speed_kmh: speedKmh,
+      heading: position.coords.heading ?? null,
+      source: "mobile_gps",
+      recorded_at: new Date().toISOString(),
+    });
+    if (locationInsert.error) console.error("GPS history save error:", locationInsert.error);
+
     setGpsPermission("granted");
     setLastGpsUpdate(new Date().toISOString());
     await refreshLocations();
@@ -219,6 +233,8 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
 
       if (cancelled) return;
 
+      setCurrentUserRole(profileData?.role ?? null);
+
       const tenantId = profileData?.org_id ?? null;
       setOrgId(tenantId);
 
@@ -244,7 +260,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
         .limit(1)
         .maybeSingle();
 
-      if (!cancelled && attendance?.clock_in && !attendance.clock_out) {
+      if (!cancelled && profileData?.role !== "Super Admin" && attendance?.clock_in && !attendance.clock_out) {
         setTracking(true);
       }
 
@@ -276,7 +292,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   }, [refreshLocations]);
 
   useEffect(() => {
-    if (!tracking || !currentUserId) {
+    if (!tracking || !currentUserId || currentUserRole === "Super Admin") {
       if (watchIdRef.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -311,7 +327,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       navigator.geolocation.clearWatch(id);
       if (watchIdRef.current === id) watchIdRef.current = null;
     };
-  }, [tracking, currentUserId, upsertCurrentLocation]);
+  }, [tracking, currentUserId, currentUserRole, upsertCurrentLocation]);
 
   useEffect(() => {
     if (!mapHostRef.current) return;
