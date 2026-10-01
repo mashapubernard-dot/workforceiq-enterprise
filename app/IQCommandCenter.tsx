@@ -17,6 +17,9 @@ function breached(t:TicketRecord,now:number){return openTicket(t)&&new Date(t.cr
 
 export default function IQCommandCenter({employees,schedules,tickets,fieldWorkOrders,hrCases,now,onNavigate}:Props){
  const [query,setQuery]=useState("");
+ const [answer,setAnswer]=useState("");
+ const [answerLoading,setAnswerLoading]=useState(false);
+ const [answerError,setAnswerError]=useState("");
  const [lastRefresh,setLastRefresh]=useState(now);
  const metrics=useMemo(()=>{
    const d=new Date(now), key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -49,16 +52,37 @@ export default function IQCommandCenter({employees,schedules,tickets,fieldWorkOr
    return r;
  },[employees,tickets,fieldWorkOrders,metrics,now]);
 
- const answer=useMemo(()=>{
-   const q=query.toLowerCase();
-   if(!q)return "";
-   if(q.includes("sla")||q.includes("ticket"))return metrics.openTickets+" tickets are open and "+metrics.breaches+" are currently beyond SLA.";
-   if(q.includes("staff")||q.includes("people")||q.includes("employee")||q.includes("working"))return metrics.clockedIn+" employees are clocked in: "+metrics.working+" Working and "+metrics.auxed+" currently auxed.";
-   if(q.includes("field")||q.includes("technician"))return metrics.fieldOpen+" field work orders remain open.";
-   if(q.includes("hr"))return metrics.hrOpen+" HR cases remain unresolved.";
-   if(q.includes("schedule"))return metrics.scheduledToday+" non-off shifts are scheduled for today.";
-   return "I can answer from live WorkforceIQ data about staff, attendance, schedules, tickets, SLA, field work and HR cases.";
- },[metrics,query]);
+ const askIQ=async()=>{
+   const question=query.trim();
+   if(!question||answerLoading)return;
+   setAnswerLoading(true);
+   setAnswerError("");
+   try{
+     const response=await fetch("/api/ask-iq",{
+       method:"POST",
+       headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({
+         question,
+         context:{
+           asOf:new Date(now).toISOString(),
+           employees:employees.slice(0,100),
+           schedules:schedules.slice(0,100),
+           tickets:tickets.slice(0,100),
+           fieldWorkOrders:fieldWorkOrders.slice(0,100),
+           hrCases:hrCases.slice(0,100),
+           metrics
+         }
+       })
+     });
+     const data=await response.json();
+     if(!response.ok)throw new Error(data?.error||"Ask IQ could not answer.");
+     setAnswer(data.answer||"No answer was returned.");
+   }catch(error){
+     setAnswerError(error instanceof Error?error.message:"Ask IQ could not answer.");
+   }finally{
+     setAnswerLoading(false);
+   }
+ };
 
  const severityClass=(s:Insight["severity"])=>s==="critical"?"border-red-200 bg-red-50 text-red-900":s==="warning"?"border-amber-200 bg-amber-50 text-amber-900":s==="info"?"border-blue-200 bg-blue-50 text-blue-900":"border-emerald-200 bg-emerald-50 text-emerald-900";
 
@@ -87,9 +111,13 @@ export default function IQCommandCenter({employees,schedules,tickets,fieldWorkOr
    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
     <div className="flex items-center gap-2"><MessageSquare size={20} className="text-violet-600"/><h3 className="text-xl font-black">Ask IQ</h3></div>
     <p className="text-sm text-slate-500 mt-1">Ask about live operational data already loaded in this session.</p>
-    <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="e.g. How many SLA breaches?" className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"/>
-    <div className="flex flex-wrap gap-2 mt-3">{["SLA breaches","Who is working?","Field jobs","HR cases","Today's schedule"].map(p=><button type="button" key={p} onClick={()=>setQuery(p)} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600">{p}</button>)}</div>
-    {answer&&<div className="mt-4 rounded-2xl bg-indigo-50 border border-indigo-100 p-4"><div className="text-xs font-black uppercase tracking-wider text-indigo-500">Live answer</div><div className="font-bold text-indigo-950 mt-1">{answer}</div></div>}
+    <div className="mt-4 flex gap-2">
+     <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")askIQ();}} placeholder="e.g. How many SLA breaches?" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"/>
+     <button type="button" onClick={askIQ} disabled={!query.trim()||answerLoading} className="shrink-0 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{answerLoading?"Thinking…":"Ask"}</button>
+    </div>
+    <div className="flex flex-wrap gap-2 mt-3">{["SLA breaches","Who is working?","Field jobs","HR cases","Today's schedule"].map(p=><button type="button" key={p} onClick={()=>{setQuery(p);setAnswerError("");}} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600">{p}</button>)}</div>
+    {answerError&&<div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{answerError}</div>}
+    {answer&&<div className="mt-4 rounded-2xl bg-indigo-50 border border-indigo-100 p-4"><div className="text-xs font-black uppercase tracking-wider text-indigo-500">Ask IQ answer</div><div className="font-bold text-indigo-950 mt-1 whitespace-pre-wrap">{answer}</div></div>}
    </div>
   </section>
 
