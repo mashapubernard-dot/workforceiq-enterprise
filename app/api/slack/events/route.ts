@@ -47,7 +47,7 @@ async function askWorkforceIQ(question: string, slackUserId: string, teamId: str
 
   const context = await getWorkforceContext(question, user);
   const instructions = [
-    "You are WorkforceIQ AI, the secure workplace assistant for WorkforceIQ Enterprise.",
+    "You are Ask IQ, the secure workplace assistant for WorkforceIQ Enterprise.",
     "Use the supplied live WorkforceIQ context for factual answers.",
     "Never invent missing data.",
     "Never expose another tenant's data.",
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         view: {
           type: "home",
           blocks: [
-            { type: "header", text: { type: "plain_text", text: "🤖 WorkforceIQ AI" } },
+            { type: "header", text: { type: "plain_text", text: "🤖 Ask IQ" } },
             { type: "section", text: { type: "mrkdwn", text: "Connected to live, tenant-aware WorkforceIQ data. Ask about attendance, late staff, schedules, tickets, people or field operations." } },
             { type: "divider" },
             { type: "section", text: { type: "mrkdwn", text: "*Try asking:*\n• “Who is working right now?”\n• “Who is late today?”\n• “Show today's schedule”\n• “What tickets are open?”\n• “Which technicians are online?”" } },
@@ -129,12 +129,12 @@ export async function POST(request: NextRequest) {
   if (event.type === "app_mention" || (event.type === "message" && event.channel_type === "im")) {
     const question = cleanMention(event.text || "");
     if (!question) {
-      await slackApi("chat.postMessage", { channel: event.channel, text: "Hi 👋 Ask me about attendance, schedules, tickets, people or field operations." });
+      await slackApi("chat.postMessage", { channel: event.channel, text: "Hi 👋 I'm Ask IQ. Ask me about attendance, schedules, tickets, people or field operations." });
       return NextResponse.json({ ok: true });
     }
 
     try {
-      await slackApi("chat.postMessage", { channel: event.channel, text: "🤖 I'm checking WorkforceIQ…", thread_ts: event.ts });
+      await slackApi("chat.postMessage", { channel: event.channel, text: "🤖 Ask IQ is checking WorkforceIQ…", thread_ts: event.ts });
       const answer = await askWorkforceIQ(question, event.user || "unknown", payload.team_id || "unknown");
       await slackApi("chat.postMessage", { channel: event.channel, text: answer, thread_ts: event.ts });
     } catch (error) {
