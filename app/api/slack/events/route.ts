@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { getWorkforceContext, resolveWorkforceUser } from "@/lib/slack-workforce";
 
 export const runtime = "nodejs";
@@ -10,10 +10,7 @@ async function slackApi(method: string, body: Record<string, unknown>) {
   if (!token) throw new Error("SLACK_BOT_TOKEN is not configured");
   const response = await fetch(`https://slack.com/api/${method}`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify(body),
     cache: "no-store",
   });
@@ -28,9 +25,9 @@ function verifySlackSignature(rawBody: string, timestamp: string | null, signatu
   const ts = Number(timestamp);
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
   const base = `v0:${timestamp}:${rawBody}`;
-  const expected = "v0=" + crypto.createHmac("sha256", secret).update(base).digest("hex");
+  const expected = "v0=" + createHmac("sha256", secret).update(base).digest("hex");
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
   } catch {
     return false;
   }
@@ -41,9 +38,7 @@ async function askWorkforceIQ(question: string, slackUserId: string, teamId: str
   if (!apiKey) return "I'm connected to WorkforceIQ, but OPENAI_API_KEY hasn't been configured yet.";
 
   const user = await resolveWorkforceUser(slackUserId, teamId);
-  if (!user) {
-    return "I couldn't securely link your Slack account to a WorkforceIQ account. Your Slack account is not linked to a WorkforceIQ user yet. An administrator must link this Slack user to the correct WorkforceIQ tenant before live data can be shown.";
-  }
+  if (!user) return "I couldn't securely link your Slack account to a WorkforceIQ account. Your Slack account is not linked to a WorkforceIQ user yet. An administrator must link this Slack user to the correct WorkforceIQ tenant before live data can be shown.";
 
   const context = await getWorkforceContext(question, user);
   const instructions = [
