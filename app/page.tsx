@@ -7078,7 +7078,7 @@ export default function Home() {
                 {([
                   ["Overview", "Live operations"],
                   ["Controls", "Feature controls"],
-                  ["Integrations", "Slack AI"],
+                  ["Integrations", "Ask IQ"],
                 ] as const).map(([tab, label]) => (
                   <button
                     key={tab}
@@ -7113,9 +7113,9 @@ export default function Home() {
                       </div>
                       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mt-4">
                         <div>
-                          <h3 className="text-3xl sm:text-4xl font-black">Slack AI</h3>
+                          <h3 className="text-3xl sm:text-4xl font-black">Ask IQ for Slack</h3>
                           <p className="text-indigo-200 mt-2 max-w-2xl">
-                            Connect your Slack workspace to the live WorkforceIQ AI assistant. The bot can answer tenant-aware workforce questions from Slack without exposing another tenant&apos;s data.
+                            Connect your Slack workspace to Ask IQ. The assistant can answer tenant-aware workforce questions from Slack without exposing another tenant&apos;s data.
                           </p>
                         </div>
                         <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500/15 border border-emerald-400/30 px-4 py-3 text-emerald-200 font-black text-sm">
