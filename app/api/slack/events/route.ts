@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { getWorkforceContext, resolveWorkforceUser } from "@/lib/slack-workforce";
 
 export const runtime = "nodejs";
@@ -19,18 +18,34 @@ async function slackApi(method: string, body: Record<string, unknown>) {
   return data;
 }
 
-function verifySlackSignature(rawBody: string, timestamp: string | null, signature: string | null) {
+function toBytes(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function toHex(bytes: ArrayBuffer) {
+  return Array.from(new Uint8Array(bytes))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifySlackSignature(rawBody: string, timestamp: string | null, signature: string | null) {
   const secret = process.env.SLACK_SIGNING_SECRET;
   if (!secret || !timestamp || !signature) return false;
+
   const ts = Number(timestamp);
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
-  const base = `v0:${timestamp}:${rawBody}`;
-  const expected = "v0=" + createHmac("sha256", secret).update(base).digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-  } catch {
-    return false;
+
+  const key = await crypto.subtle.importKey("raw", toBytes(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = toHex(await crypto.subtle.sign("HMAC", key, toBytes(`v0:${timestamp}:${rawBody}`)));
+  const expected = `v0=${digest}`;
+
+  if (expected.length !== signature.length) return false;
+
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i += 1) {
+    mismatch |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
   }
+  return mismatch === 0;
 }
 
 async function askWorkforceIQ(question: string, slackUserId: string, teamId: string) {
@@ -83,7 +98,8 @@ function cleanMention(text: string) {
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
-  if (!verifySlackSignature(rawBody, request.headers.get("x-slack-request-timestamp"), request.headers.get("x-slack-signature"))) {
+
+  if (!(await verifySlackSignature(rawBody, request.headers.get("x-slack-request-timestamp"), request.headers.get("x-slack-signature")))) {
     return NextResponse.json({ ok: false, error: "invalid_signature" }, { status: 401 });
   }
 
