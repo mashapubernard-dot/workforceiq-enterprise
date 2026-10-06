@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getWorkforceContext, resolveWorkforceUser } from "@/lib/slack-workforce";
+import { getWorkforceContext, resolveWorkforceUser } from "../../../../lib/slack-workforce";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
