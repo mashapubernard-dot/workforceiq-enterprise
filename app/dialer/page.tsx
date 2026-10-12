@@ -23,6 +23,7 @@ import {
   Send,
 } from "lucide-react";
 import { supabase } from "../../supabase/client";
+import RealVoipPanel from "../RealVoipPanel";
  
 type CallOutcome = "Connected" | "No Answer" | "Voicemail" | "Busy" | "Wrong Number";
  
@@ -280,6 +281,8 @@ export default function DialerPage() {
         </div>
       </div>
  
+      <div className="px-5 pt-5"><RealVoipPanel /></div>
+
       {/* BODY */}
       <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-5 p-5">
         {/* QUEUE */}
