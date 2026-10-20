@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, LocateFixed, MapPin, RefreshCw, Search, ShieldCheck, Smartphone, Wifi } from "lucide-react";
+import { Activity, AlertTriangle, LocateFixed, MapPin, RefreshCw, Search, ShieldCheck, Smartphone, Wifi } from "lucide-react";
 import { supabase } from "../supabase/client";
 
 declare global {
