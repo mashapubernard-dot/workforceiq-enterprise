@@ -695,21 +695,16 @@ function formatDuration(milliseconds: number) {
 }
  
 function formatShortDuration(milliseconds: number) {
-  if (milliseconds <= 0) {
-    return "0h 0m";
-  }
- 
-  const totalMinutes = Math.floor(
-    milliseconds / 1000 / 60
+  const totalSeconds = Math.max(
+    0,
+    Math.floor(milliseconds / 1000)
   );
- 
-  const hours = Math.floor(
-    totalMinutes / 60
-  );
- 
-  const minutes = totalMinutes % 60;
- 
-  return `${hours}h ${minutes}m`;
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${hours}h ${minutes}m ${seconds}s`;
 }
  
 function getEmployeeDuration(
