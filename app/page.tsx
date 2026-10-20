@@ -1203,6 +1203,10 @@ export default function Home() {
     id: string;
     asset_tag: string;
     device_name: string;
+    serial_number: string | null;
+    mac_address: string | null;
+    model_number: string | null;
+    make: string | null;
     category: string;
     status: string;
     assigned_to: string;
@@ -1217,6 +1221,10 @@ export default function Home() {
   const [assetForm, setAssetForm] = useState({
     asset_tag: "",
     device_name: "",
+    serial_number: "",
+    mac_address: "",
+    model_number: "",
+    make: "",
     category: "POS Terminal",
     status: "In Service",
     assigned_to: "",
@@ -3497,7 +3505,7 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from("assets")
-        .select("id,asset_tag,device_name,category,status,assigned_to,location,warranty_expires,notes,created_at")
+        .select("id,asset_tag,device_name,serial_number,mac_address,model_number,make,category,status,assigned_to,location,warranty_expires,notes,created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setAssets((data ?? []) as AssetRecord[]);
@@ -3514,6 +3522,10 @@ export default function Home() {
       const { error } = await supabase.from("assets").insert({
         asset_tag: assetForm.asset_tag.trim(),
         device_name: assetForm.device_name.trim(),
+        serial_number: assetForm.serial_number.trim() || null,
+        mac_address: assetForm.mac_address.trim() || null,
+        model_number: assetForm.model_number.trim() || null,
+        make: assetForm.make.trim() || null,
         category: assetForm.category,
         status: assetForm.status,
         assigned_to: assetForm.assigned_to.trim(),
@@ -3525,6 +3537,10 @@ export default function Home() {
       setAssetForm({
         asset_tag: "",
         device_name: "",
+        serial_number: "",
+        mac_address: "",
+        model_number: "",
+        make: "",
         category: "POS Terminal",
         status: "In Service",
         assigned_to: "",
@@ -9559,7 +9575,33 @@ export default function Home() {
                     <input
                       value={assetForm.device_name}
                       onChange={(e) => setAssetForm((f) => ({ ...f, device_name: e.target.value }))}
-                      placeholder="Device name"
+                      placeholder="Device name *"
+                      required
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={assetForm.serial_number}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, serial_number: e.target.value }))}
+                      placeholder="Serial number"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={assetForm.mac_address}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, mac_address: e.target.value }))}
+                      placeholder="MAC address"
+                      autoCapitalize="characters"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={assetForm.make}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, make: e.target.value }))}
+                      placeholder="Make / manufacturer"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={assetForm.model_number}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, model_number: e.target.value }))}
+                      placeholder="Model number"
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
                     <select
@@ -9663,6 +9705,12 @@ export default function Home() {
                         <div className="text-sm text-slate-500 mt-1">
                           {asset.category} • {asset.assigned_to || "Unassigned"} •{" "}
                           {asset.location || "No location set"}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                          {asset.make && <span>Make: <strong className="text-slate-700">{asset.make}</strong></span>}
+                          {asset.model_number && <span>Model: <strong className="text-slate-700">{asset.model_number}</strong></span>}
+                          {asset.serial_number && <span>Serial: <strong className="text-slate-700">{asset.serial_number}</strong></span>}
+                          {asset.mac_address && <span>MAC: <strong className="text-slate-700">{asset.mac_address}</strong></span>}
                         </div>
                         {asset.warranty_expires && (
                           <div className="text-xs text-slate-400 mt-1">
