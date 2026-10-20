@@ -9686,12 +9686,14 @@ export default function Home() {
                       onChange={(e) => setAssetForm((f) => ({ ...f, warranty_expires: e.target.value }))}
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
+                    <div className="sm:col-span-2 border-b border-slate-100 pb-1 pt-2 text-xs font-black uppercase tracking-wider text-teal-700">Operational / Technical Data</div>
                     <input
                       value={assetForm.ip_address}
                       onChange={(e) => setAssetForm((f) => ({ ...f, ip_address: e.target.value }))}
                       placeholder="IP address (technical / operational)"
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
+                    <div className="sm:col-span-2 border-b border-slate-100 pb-1 pt-2 text-xs font-black uppercase tracking-wider text-slate-700">Financial & Ownership Data</div>
                     <input
                       value={assetForm.cost_center}
                       onChange={(e) => setAssetForm((f) => ({ ...f, cost_center: e.target.value }))}
