@@ -797,6 +797,68 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-slate-200 p-4 sm:p-5">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Currently clocked in</h3>
+              <p className="mt-1 text-sm text-slate-500">Live attendance roster with the geofence result saved when each person clocked in. Refresh to update the list.</p>
+            </div>
+            <span className="inline-flex w-fit rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">{attendanceRows.filter((row) => !row.clock_out && !["Super Admin", "Platform Super Admin"].includes(personMap.get(row.user_id)?.role ?? "")).length} active clock-ins</span>
+          </div>
+        </div>
+        {attendanceRows.filter((row) => !row.clock_out && !["Super Admin", "Platform Super Admin"].includes(personMap.get(row.user_id)?.role ?? "")).length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-500">No active clock-ins found for this tenant. If someone has clocked in, use Refresh and check that the attendance record is visible to this administrator.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-black">Employee</th>
+                  <th className="px-4 py-3 font-black">Clock-in time</th>
+                  <th className="px-4 py-3 font-black">Clock-in geofence</th>
+                  <th className="px-4 py-3 font-black">Clock-in coordinates</th>
+                  <th className="px-4 py-3 font-black">Current GPS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {attendanceRows.filter((row) => !row.clock_out && !["Super Admin", "Platform Super Admin"].includes(personMap.get(row.user_id)?.role ?? "")).map((row) => {
+                  const person = personMap.get(row.user_id);
+                  const status = (row.clock_in_geofence_status ?? "").toUpperCase();
+                  const inside = status === "INSIDE";
+                  const outside = status === "OUTSIDE";
+                  const coords = typeof row.clock_in_latitude === "number" && typeof row.clock_in_longitude === "number";
+                  const live = locations.find((item) => item.user_id === row.user_id && Date.now() - new Date(item.last_seen_at).getTime() <= 60000);
+                  const liveFence = live ? getLiveFenceResult(live, sites) : null;
+                  return (
+                    <tr key={row.id} className="hover:bg-slate-50/80">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">{person?.full_name ?? "Employee"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{person?.role ?? "Unknown role"}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="font-semibold text-slate-700">{new Date(row.clock_in).toLocaleString()}</div>
+                        <div className="mt-1 text-xs text-slate-500">Still clocked in</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${inside ? "bg-emerald-100 text-emerald-700" : outside ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+                          {inside ? "Inside geofence" : outside ? "Outside geofence" : status === "NO_GEOFENCE_CONFIGURED" ? "No fence configured" : "No GPS evidence"}
+                        </span>
+                        <div className="mt-1 text-xs text-slate-500">{sites.find((site) => site.id === row.clock_in_site_id)?.name ?? "Site not recorded"}{typeof row.clock_in_distance_m === "number" ? ` · ${Math.round(row.clock_in_distance_m)}m from site` : ""}</div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{coords ? <a className="text-blue-700 underline" href={`https://www.google.com/maps?q=${row.clock_in_latitude},${row.clock_in_longitude}`} target="_blank" rel="noreferrer">{row.clock_in_latitude!.toFixed(5)}, {row.clock_in_longitude!.toFixed(5)}</a> : "No coordinates saved"}</td>
+                      <td className="px-4 py-3">
+                        {live && liveFence ? <><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${liveFence.inside ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{liveFence.label}</span><div className="mt-1 text-xs text-slate-500">{liveFence.siteName ?? "Nearest site"}{liveFence.distance !== null ? ` · ${liveFence.distance}m` : ""}</div><div className="mt-1 text-xs text-slate-400">Updated {new Date(live.last_seen_at).toLocaleTimeString()}</div></> : <span className="text-xs font-semibold text-amber-700">No recent GPS (over 60 sec or permission unavailable)</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-200 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <ShieldCheck size={19} className="text-indigo-600" />
             <h3 className="text-lg font-black text-slate-900">Clock-in location & geofence audit</h3>
