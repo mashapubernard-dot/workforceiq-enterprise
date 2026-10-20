@@ -53,6 +53,7 @@ import WorkforceIQSessionGuard from "./WorkforceIQSessionGuard";
 import AdvancedWorkforcePlatform from "./AdvancedWorkforcePlatform";
 import IQCommandCenter from "./IQCommandCenter";
 import IQAutomationMachine from "./IQAutomationMachine";
+import MasterAdminBilling from "./MasterAdminBilling";
  
 type Role =
   | "Administrator"
@@ -443,6 +444,14 @@ const allNavItems = [
     color: "from-fuchsia-700 to-purple-900",
     light: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
     iconBg: "bg-fuchsia-100 text-fuchsia-600",
+  },
+  {
+    name: "Platform Billing",
+    icon: Receipt,
+    roles: ["Super Admin"] as Role[],
+    color: "from-emerald-700 to-teal-900",
+    light: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    iconBg: "bg-emerald-100 text-emerald-700",
   },
 ];
  
@@ -10081,6 +10090,10 @@ export default function Home() {
             </div>
           )}
 
+          {profile?.role === "Super Admin" && activeTab === "Platform Billing" && (
+            <MasterAdminBilling />
+          )}
+
           {/* OTHER SECTIONS */}
           {activeTab !==
             "Dashboard" &&
@@ -10113,7 +10126,9 @@ export default function Home() {
             activeTab !==
               "Billing" &&
             activeTab !==
-              "Tenant Management" && (
+              "Tenant Management" &&
+            activeTab !==
+              "Platform Billing" && (
               <div className="relative overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-sm p-8">
                 <div
                   className={`absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b ${activeGradient}`}
