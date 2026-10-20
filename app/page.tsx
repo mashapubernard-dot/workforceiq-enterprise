@@ -55,6 +55,7 @@ import IQCommandCenter from "./IQCommandCenter";
 import IQAutomationMachine from "./IQAutomationMachine";
 import MasterAdminBilling from "./MasterAdminBilling";
 import GPSLiveFieldMap from "./GPSLiveFieldMap";
+import WorkforceLocationTracker from "./WorkforceLocationTracker";
  
 type Role =
   | "Administrator"
@@ -4595,6 +4596,7 @@ export default function Home() {
       `}</style>
 
       <WorkforceIQSessionGuard />
+      <WorkforceLocationTracker profile={profile} enabled={activeTab !== "GPS Live Field Map"} />
       {/* SIDEBAR */}
       {leftMenuOpen && (
         <div
