@@ -124,7 +124,7 @@ export default function MasterAdminBilling() {
         const next: Record<string, Draft> = {};
         for (const org of orgRows) {
           const existing = subscriptionRows.find((item) => item.org_id === org.id);
-          next[org.id] = current[org.id] ?? toDraft(existing);
+          next[org.id] = toDraft(existing);
         }
         return next;
       });
