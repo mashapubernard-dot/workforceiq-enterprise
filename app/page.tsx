@@ -2553,34 +2553,41 @@ export default function Home() {
         };
 
         let matchedSite: any = null;
+        let nearestSite: any = null;
         let nearestDistance = Number.POSITIVE_INFINITY;
 
         for (const site of enforcedSites ?? []) {
           if (typeof site.latitude !== "number" || typeof site.longitude !== "number") continue;
           const distance = distanceMeters(latitude, longitude, site.latitude, site.longitude);
+          const radius = Number(site.radius_m || 100);
+
           if (distance < nearestDistance) {
             nearestDistance = distance;
+            nearestSite = { ...site, distance };
+          }
+
+          // A clock-in is valid if the employee is inside ANY enforced site boundary.
+          if (distance <= radius && (!matchedSite || distance < matchedSite.distance)) {
             matchedSite = { ...site, distance };
           }
         }
 
-        if ((enforcedSites ?? []).length > 0 && !matchedSite) {
+        if ((enforcedSites ?? []).length > 0 && !nearestSite) {
           throw new Error("GPS sites are configured, but none has valid coordinates. Ask an administrator to configure the site.");
         }
-
         const { data: tenantContext } = await supabase
           .from("user_profiles")
           .select("org_id")
           .eq("id", profile.id)
           .maybeSingle();
 
-        if (matchedSite && matchedSite.distance > Number(matchedSite.radius_m || 100)) {
-          const radius = Number(matchedSite.radius_m || 100);
+        if ((enforcedSites ?? []).length > 0 && !matchedSite && nearestSite) {
+          const radius = Number(nearestSite.radius_m || 100);
           const reason =
             "Clock-in blocked: you are " +
-            Math.round(matchedSite.distance) +
+            Math.round(nearestSite.distance) +
             "m from " +
-            matchedSite.name +
+            nearestSite.name +
             ". The allowed geo-fence is " +
             Math.round(radius) +
             "m.";
@@ -2591,11 +2598,11 @@ export default function Home() {
               .insert({
                 org_id: tenantContext.org_id,
                 user_id: profile.id,
-                site_id: matchedSite.id,
+                site_id: nearestSite.id,
                 latitude,
                 longitude,
                 accuracy_m: accuracy,
-                distance_m: matchedSite.distance,
+                distance_m: nearestSite.distance,
                 radius_m: radius,
                 result: "OUTSIDE",
                 reason,
@@ -2605,7 +2612,6 @@ export default function Home() {
 
           throw new Error(reason);
         }
-
         const { error } = await supabase
           .from("attendance")
           .insert({
