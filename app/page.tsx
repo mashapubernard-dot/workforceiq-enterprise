@@ -9539,7 +9539,7 @@ export default function Home() {
                     onClick={() => setShowAssetForm((v) => !v)}
                     className="inline-flex items-center gap-2 rounded-full bg-white text-slate-900 px-4 py-2 text-sm font-bold hover:bg-teal-50 transition"
                   >
-                    <Plus size={16} /> Add asset
+                    <Plus size={16} /> Add New Asset
                   </button>
                 </div>
                 <p className="text-teal-100 mt-2">
@@ -9564,7 +9564,8 @@ export default function Home() {
  
               {showAssetForm && (
                 <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-3">
-                  <h3 className="font-black text-lg">Register a new asset</h3>
+                  <h3 className="font-black text-lg">Register New Asset Details</h3>
+                  <p className="text-sm text-slate-500">Enter the device identity details below. Serial number, MAC address, make, and model number are saved with the asset.</p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <input
                       value={assetForm.asset_tag}
@@ -9579,31 +9580,39 @@ export default function Home() {
                       required
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
-                      value={assetForm.serial_number}
-                      onChange={(e) => setAssetForm((f) => ({ ...f, serial_number: e.target.value }))}
-                      placeholder="Serial number"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
-                    <input
-                      value={assetForm.mac_address}
-                      onChange={(e) => setAssetForm((f) => ({ ...f, mac_address: e.target.value }))}
-                      placeholder="MAC address"
-                      autoCapitalize="characters"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
-                    <input
-                      value={assetForm.make}
-                      onChange={(e) => setAssetForm((f) => ({ ...f, make: e.target.value }))}
-                      placeholder="Make / manufacturer"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
-                    <input
-                      value={assetForm.model_number}
-                      onChange={(e) => setAssetForm((f) => ({ ...f, model_number: e.target.value }))}
-                      placeholder="Model number"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
+                    <label className="block text-sm font-semibold text-slate-700">Serial number
+                      <input
+                        value={assetForm.serial_number}
+                        onChange={(e) => setAssetForm((f) => ({ ...f, serial_number: e.target.value }))}
+                        placeholder="Enter serial number"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">MAC address
+                      <input
+                        value={assetForm.mac_address}
+                        onChange={(e) => setAssetForm((f) => ({ ...f, mac_address: e.target.value }))}
+                        placeholder="Enter MAC address"
+                        autoCapitalize="characters"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Make / manufacturer
+                      <input
+                        value={assetForm.make}
+                        onChange={(e) => setAssetForm((f) => ({ ...f, make: e.target.value }))}
+                        placeholder="Enter make / manufacturer"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Model number
+                      <input
+                        value={assetForm.model_number}
+                        onChange={(e) => setAssetForm((f) => ({ ...f, model_number: e.target.value }))}
+                        placeholder="Enter model number"
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
+                      />
+                    </label>
                     <select
                       value={assetForm.category}
                       onChange={(e) => setAssetForm((f) => ({ ...f, category: e.target.value }))}
