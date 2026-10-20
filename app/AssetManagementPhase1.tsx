@@ -69,6 +69,7 @@ export default function AssetManagementPhase1() {
   const [tab, setTab] = useState<WorkspaceTab>("workspace");
   const [orgId, setOrgId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [actorName, setActorName] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [models, setModels] = useState<HardwareModel[]>([]);
   const [events, setEvents] = useState<LifecycleEvent[]>([]);
@@ -95,10 +96,11 @@ export default function AssetManagementPhase1() {
 
       const { data: profile, error: profileError } = await supabase
         .from("user_profiles")
-        .select("org_id, organization_id")
+        .select("org_id, organization_id, full_name, email")
         .eq("id", user.id)
         .maybeSingle();
       if (profileError) throw profileError;
+      setActorName(profile?.full_name ?? profile?.email ?? user.email ?? null);
       const activeOrgId = profile?.org_id ?? profile?.organization_id ?? null;
       setOrgId(activeOrgId);
 
@@ -226,6 +228,7 @@ export default function AssetManagementPhase1() {
         event_type: eventForm.event_type,
         notes: eventForm.notes.trim() || null,
         created_by: userId,
+        created_by_name: actorName,
       });
       if (insertError) throw insertError;
       setEventForm((current) => ({ ...current, notes: "" }));
