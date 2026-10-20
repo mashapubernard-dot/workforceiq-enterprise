@@ -2263,7 +2263,12 @@ export default function Home() {
         setProfile(
           userProfile
         );
- 
+
+        // Platform-level admins land directly in the billing control centre.
+        if (userProfile.role === "Platform Super Admin") {
+          setActiveTab("Platform Billing");
+        }
+
         localStorage.setItem(
           "workforceiq_profile",
           JSON.stringify(
