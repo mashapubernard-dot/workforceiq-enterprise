@@ -50,7 +50,7 @@ export default function WorkforceLocationTracker({
             ? null
             : position.coords.speed * 3.6;
 
-        const [{ data: existing }, { data: assignedDevice }] = await Promise.all([
+        const [{ data: existing, error: lookupError }, { data: assignedDevice }] = await Promise.all([
           supabase
             .from("mobile_workforce_sessions")
             .select("id")
@@ -68,6 +68,10 @@ export default function WorkforceLocationTracker({
             .maybeSingle(),
         ]);
 
+        if (lookupError) {
+          console.warn("Workforce location session lookup failed:", lookupError.message);
+          return;
+        }
         if (cancelled) return;
 
         const payload = {
@@ -115,61 +119,57 @@ export default function WorkforceLocationTracker({
       }
     };
 
-    const checkClockedIn = async () => {
-      if (cancelled || checking) return;
+    const startWatch = () => {
+      if (cancelled || watchId !== null || !navigator.geolocation) return;
+      watchId = navigator.geolocation.watchPosition(
+        (position) => void savePosition(position),
+        (error) => console.warn("Workforce GPS unavailable; allow location access for live map:", error.message),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      );
+    };
+
+    const initialize = async () => {
+      if (checking || cancelled) return;
       checking = true;
       try {
-        if (!orgId) {
-          const { data } = await supabase
-            .from("user_profiles")
-            .select("org_id")
-            .eq("id", profile.id)
-            .maybeSingle();
-          orgId = data?.org_id ?? null;
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select("org_id")
+          .eq("id", profile.id)
+          .maybeSingle();
+
+        if (error) {
+          console.warn("Could not load tenant for GPS tracker:", error.message);
+          return;
         }
+        orgId = data?.org_id ?? null;
 
         if (!orgId || cancelled) {
           stopWatch();
           return;
         }
 
-        const { data: activeAttendance, error } = await supabase
-          .from("attendance")
-          .select("id")
-          .eq("user_id", profile.id)
-          .is("clock_out", null)
-          .order("clock_in", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) {
-          console.warn("Could not verify clock-in state for GPS tracking:", error.message);
-          return;
-        }
-
-        if (activeAttendance && watchId === null && navigator.geolocation) {
-          watchId = navigator.geolocation.watchPosition(
-            (position) => void savePosition(position),
-            (error) => console.warn("Workforce GPS unavailable:", error.message),
-            { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
-          );
-        } else if (!activeAttendance) {
-          stopWatch();
-        }
+        // A signed-in workforce user should appear online even before clock-in.
+        // GPS is only available after the browser/device grants location permission.
+        startWatch();
       } catch (error) {
-        console.warn("Workforce GPS tracker check failed:", error);
+        console.warn("Workforce GPS tracker initialization failed:", error);
       } finally {
         checking = false;
       }
     };
 
-    void checkClockedIn();
-    intervalId = window.setInterval(() => void checkClockedIn(), 10000);
+    void initialize();
+    intervalId = window.setInterval(() => {
+      if (!orgId) void initialize();
+    }, 10000);
 
     return () => {
       cancelled = true;
       if (intervalId !== null) window.clearInterval(intervalId);
       stopWatch();
+      // The live dashboard considers a user offline when their last GPS ping is stale.
+      // Do not delete the session or its last known location on logout/navigation.
     };
   }, [profile?.id, profile?.role, enabled]);
 
