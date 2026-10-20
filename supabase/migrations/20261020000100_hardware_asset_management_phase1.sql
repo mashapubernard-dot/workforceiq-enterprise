@@ -62,7 +62,8 @@ create index if not exists assets_org_status_idx on public.assets(org_id, status
 
 -- Reuse the existing asset_events timeline table rather than creating a duplicate.
 alter table public.asset_events
-  add column if not exists org_id uuid references public.organizations(id) on delete cascade;
+  add column if not exists org_id uuid references public.organizations(id) on delete cascade,
+  add column if not exists created_by_name text;
 
 update public.asset_events e
 set org_id = a.org_id
@@ -70,6 +71,12 @@ from public.assets a
 where e.asset_id = a.id
   and e.org_id is null
   and a.org_id is not null;
+
+update public.asset_events e
+set created_by_name = coalesce(up.full_name, up.email)
+from public.user_profiles up
+where e.created_by = up.id
+  and e.created_by_name is null;
 
 create table if not exists public.asset_relationships (
   id uuid primary key default gen_random_uuid(),
@@ -147,13 +154,16 @@ begin
   end if;
 
   if tg_op = 'INSERT' then
-    insert into public.asset_events (org_id, asset_id, event_type, to_value, notes, created_by)
-    values (new.org_id, new.id, 'procurement', new.asset_tag, 'Asset registered in WorkforceIQ.', auth.uid());
+    insert into public.asset_events (org_id, asset_id, event_type, to_value, notes, created_by, created_by_name)
+    values (
+      new.org_id, new.id, 'procurement', new.asset_tag, 'Asset registered in WorkforceIQ.', auth.uid(),
+      (select coalesce(up.full_name, up.email) from public.user_profiles up where up.id = auth.uid())
+    );
     return new;
   end if;
 
   if old.status is distinct from new.status then
-    insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by)
+    insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by, created_by_name)
     values (
       new.org_id, new.id,
       case
@@ -162,7 +172,8 @@ begin
         when lower(new.status) in ('in storage', 'returned') then 'return'
         else 'status_change'
       end,
-      old.status, new.status, 'Status updated.', auth.uid()
+      old.status, new.status, 'Status updated.', auth.uid(),
+      (select coalesce(up.full_name, up.email) from public.user_profiles up where up.id = auth.uid())
     );
   end if;
 
@@ -173,13 +184,17 @@ begin
       case when nullif(btrim(new.assigned_to), '') is null then 'return'
            when nullif(btrim(old.assigned_to), '') is null then 'assignment'
            else 'transfer' end,
-      old.assigned_to, new.assigned_to, 'Asset assignment updated.', auth.uid()
+      old.assigned_to, new.assigned_to, 'Asset assignment updated.', auth.uid(),
+      (select coalesce(up.full_name, up.email) from public.user_profiles up where up.id = auth.uid())
     );
   end if;
 
   if old.location is distinct from new.location then
     insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by)
-    values (new.org_id, new.id, 'transfer', old.location, new.location, 'Asset location updated.', auth.uid());
+    values (
+      new.org_id, new.id, 'transfer', old.location, new.location, 'Asset location updated.', auth.uid(),
+      (select coalesce(up.full_name, up.email) from public.user_profiles up where up.id = auth.uid())
+    );
   end if;
 
   return new;
