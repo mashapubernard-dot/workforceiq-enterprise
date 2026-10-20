@@ -2567,16 +2567,42 @@ export default function Home() {
           throw new Error("GPS sites are configured, but none has valid coordinates. Ask an administrator to configure the site.");
         }
 
+        const { data: tenantContext } = await supabase
+          .from("user_profiles")
+          .select("org_id")
+          .eq("id", profile.id)
+          .maybeSingle();
+
         if (matchedSite && matchedSite.distance > Number(matchedSite.radius_m || 100)) {
-          throw new Error(
+          const radius = Number(matchedSite.radius_m || 100);
+          const reason =
             "Clock-in blocked: you are " +
-              Math.round(matchedSite.distance) +
-              "m from " +
-              matchedSite.name +
-              ". The allowed geo-fence is " +
-              Math.round(Number(matchedSite.radius_m || 100)) +
-              "m."
-          );
+            Math.round(matchedSite.distance) +
+            "m from " +
+            matchedSite.name +
+            ". The allowed geo-fence is " +
+            Math.round(radius) +
+            "m.";
+
+          if (tenantContext?.org_id) {
+            const { error: eventError } = await supabase
+              .from("workforce_geofence_events")
+              .insert({
+                org_id: tenantContext.org_id,
+                user_id: profile.id,
+                site_id: matchedSite.id,
+                latitude,
+                longitude,
+                accuracy_m: accuracy,
+                distance_m: matchedSite.distance,
+                radius_m: radius,
+                result: "OUTSIDE",
+                reason,
+              });
+            if (eventError) console.warn("Could not save blocked geofence attempt:", eventError);
+          }
+
+          throw new Error(reason);
         }
 
         const { error } = await supabase
@@ -2595,6 +2621,27 @@ export default function Home() {
           });
 
         if (error) throw error;
+
+        if (tenantContext?.org_id) {
+          const { error: eventError } = await supabase
+            .from("workforce_geofence_events")
+            .insert({
+              org_id: tenantContext.org_id,
+              user_id: profile.id,
+              site_id: matchedSite?.id ?? null,
+              latitude,
+              longitude,
+              accuracy_m: accuracy,
+              distance_m: matchedSite?.distance ?? null,
+              radius_m: matchedSite ? Number(matchedSite.radius_m || 100) : null,
+              result: matchedSite ? "INSIDE" : "NO_GEOFENCE_CONFIGURED",
+              reason: matchedSite
+                ? "Clock-in accepted inside the configured geofence."
+                : "Clock-in accepted because no enforced geofence is configured.",
+            });
+          if (eventError) console.warn("Could not save geofence clock-in event:", eventError);
+        }
+
         clearStoredStatusStartedAt(profile.id);
         setStatusStartedAt(null);
       }
@@ -2602,6 +2649,33 @@ export default function Home() {
       await loadWorkforce(profile);
     } catch (error: any) {
       console.error("Clock action error:", error);
+      if (
+        error?.code === 1 &&
+        profile &&
+        profile.role !== "Super Admin" &&
+        profile.role !== "Platform Super Admin"
+      ) {
+        try {
+          const { data: tenantContext } = await supabase
+            .from("user_profiles")
+            .select("org_id")
+            .eq("id", profile.id)
+            .maybeSingle();
+          if (tenantContext?.org_id) {
+            const { error: eventError } = await supabase
+              .from("workforce_geofence_events")
+              .insert({
+                org_id: tenantContext.org_id,
+                user_id: profile.id,
+                result: "GPS_PERMISSION_DENIED",
+                reason: "Clock-in could not continue because device location permission was denied or unavailable.",
+              });
+            if (eventError) console.warn("Could not save GPS permission event:", eventError);
+          }
+        } catch (eventLogError) {
+          console.warn("Could not record GPS permission issue:", eventLogError);
+        }
+      }
       setClockError(
         error?.code === 1
           ? "GPS permission is required to clock in. Please allow location access for WorkforceIQ."
