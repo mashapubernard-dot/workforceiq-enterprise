@@ -44,6 +44,20 @@ type AttendanceGeoRow = {
 };
 type Site = { id: string; name: string; latitude: number | null; longitude: number | null; radius_m: number | null; enabled: boolean; enforce_geofence: boolean; };
 
+type GeofenceEvent = {
+  id: string;
+  user_id: string;
+  site_id: string | null;
+  attempted_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy_m: number | null;
+  distance_m: number | null;
+  radius_m: number | null;
+  result: string;
+  reason: string | null;
+};
+
 type Props = {
   compact?: boolean;
 };
@@ -87,6 +101,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   const [people, setPeople] = useState<Person[]>([]);
   const [attendanceRows, setAttendanceRows] = useState<AttendanceGeoRow[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [geofenceEvents, setGeofenceEvents] = useState<GeofenceEvent[]>([]);
   const [deviceSearch, setDeviceSearch] = useState("");
   const [deviceSearchError, setDeviceSearchError] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -164,18 +179,23 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   }, []);
 
   const refreshAttendance = useCallback(async () => {
-    const [attendanceResult, sitesResult] = await Promise.all([
+    const [attendanceResult, sitesResult, eventsResult] = await Promise.all([
       supabase.from("attendance")
         .select("id,user_id,clock_in,clock_out,clock_in_latitude,clock_in_longitude,clock_in_accuracy_m,clock_in_distance_m,clock_in_geofence_status,clock_in_site_id")
         .order("clock_in", { ascending: false }).limit(500),
       supabase.from("workforce_sites")
         .select("id,name,latitude,longitude,radius_m,enabled,enforce_geofence")
         .order("name", { ascending: true }),
+      supabase.from("workforce_geofence_events")
+        .select("id,user_id,site_id,attempted_at,latitude,longitude,accuracy_m,distance_m,radius_m,result,reason")
+        .order("attempted_at", { ascending: false }).limit(200),
     ]);
     if (attendanceResult.error) console.error("GPS attendance audit load error:", attendanceResult.error);
     else setAttendanceRows((attendanceResult.data ?? []) as AttendanceGeoRow[]);
     if (sitesResult.error) console.error("GPS site load error:", sitesResult.error);
     else setSites((sitesResult.data ?? []) as Site[]);
+    if (eventsResult.error) console.error("GPS geofence event load error:", eventsResult.error);
+    else setGeofenceEvents((eventsResult.data ?? []) as GeofenceEvent[]);
   }, []);
 
   const upsertCurrentLocation = useCallback(async (position: GeolocationPosition) => {
@@ -649,8 +669,70 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
           </div>
         )}
         <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-          The clock-in code blocks employees who are outside an enforced geofence. Those blocked attempts are not currently saved as attendance records; this audit shows recorded clock-ins and their saved results.
+          This table shows recorded clock-ins. Blocked attempts and GPS permission failures are listed below.
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-200 p-4 sm:p-5">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={19} className="text-red-600" />
+            <h3 className="text-lg font-black text-slate-900">Geofence exceptions & blocked clock-in attempts</h3>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">Includes outside-boundary attempts and clock-ins stopped because GPS permission was unavailable.</p>
+        </div>
+        {geofenceEvents.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-500">No geofence exceptions or GPS permission failures have been recorded.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-black">Employee</th>
+                  <th className="px-4 py-3 font-black">Attempt time</th>
+                  <th className="px-4 py-3 font-black">Result</th>
+                  <th className="px-4 py-3 font-black">Distance / boundary</th>
+                  <th className="px-4 py-3 font-black">Coordinates</th>
+                  <th className="px-4 py-3 font-black">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {geofenceEvents.slice(0, 100).map((event) => {
+                  const person = personMap.get(event.user_id);
+                  const outside = event.result === "OUTSIDE";
+                  const denied = event.result === "GPS_PERMISSION_DENIED";
+                  const coords = typeof event.latitude === "number" && typeof event.longitude === "number";
+                  return (
+                    <tr key={event.id} className="align-top hover:bg-slate-50/80">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">{person?.full_name ?? "Employee"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{person?.role ?? "Unknown role"}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">{new Date(event.attempted_at).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <span className={"inline-flex rounded-full px-2.5 py-1 text-xs font-black " + (outside || denied ? "bg-red-100 text-red-700" : event.result === "INSIDE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800")}>
+                          {event.result === "OUTSIDE" ? "Blocked — outside fence" : denied ? "GPS permission denied" : event.result === "INSIDE" ? "Inside geofence" : "No fence configured"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {typeof event.distance_m === "number" ? Math.round(event.distance_m) + "m away" : "—"}
+                        {typeof event.radius_m === "number" ? " / " + Math.round(event.radius_m) + "m allowed" : ""}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                        {coords ? (
+                          <a className="text-blue-700 underline" href={"https://www.google.com/maps?q=" + event.latitude + "," + event.longitude} target="_blank" rel="noreferrer">
+                            {event.latitude!.toFixed(5)}, {event.longitude!.toFixed(5)}
+                          </a>
+                        ) : "No coordinates"}
+                      </td>
+                      <td className="px-4 py-3 max-w-sm text-xs text-slate-600">{event.reason || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
