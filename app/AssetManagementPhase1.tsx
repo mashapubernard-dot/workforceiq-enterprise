@@ -50,6 +50,8 @@ type LifecycleEvent = {
   created_at: string;
 };
 
+type OrganizationRow = { id: string; name: string; organization_name?: string | null };
+
 type AssetRelationship = {
   id: string;
   org_id: string;
@@ -70,6 +72,11 @@ export default function AssetManagementPhase1() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [actorName, setActorName] = useState<string | null>(null);
+  const [isPlatformSuperAdmin, setIsPlatformSuperAdmin] = useState(false);
+  const [organizations, setOrganizations] = useState<OrganizationRow[]>([]);
+  const [legacyOrgSelections, setLegacyOrgSelections] = useState<Record<string, string>>({});
+  const [mapAssetId, setMapAssetId] = useState("");
+  const [mapModelId, setMapModelId] = useState("");
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [models, setModels] = useState<HardwareModel[]>([]);
   const [events, setEvents] = useState<LifecycleEvent[]>([]);
@@ -96,11 +103,20 @@ export default function AssetManagementPhase1() {
 
       const { data: profile, error: profileError } = await supabase
         .from("user_profiles")
-        .select("org_id, organization_id, full_name, email")
+        .select("org_id, organization_id, full_name, email, role")
         .eq("id", user.id)
         .maybeSingle();
       if (profileError) throw profileError;
       setActorName(profile?.full_name ?? profile?.email ?? user.email ?? null);
+      const isSuperAdmin = profile?.role === "Super Admin" || profile?.role === "Platform Super Admin";
+      setIsPlatformSuperAdmin(isSuperAdmin);
+      if (isSuperAdmin) {
+        const { data: orgData, error: orgError } = await supabase.from("organizations").select("id,name,organization_name").order("name");
+        if (orgError) throw orgError;
+        setOrganizations((orgData ?? []) as OrganizationRow[]);
+      } else {
+        setOrganizations([]);
+      }
       const activeOrgId = profile?.org_id ?? profile?.organization_id ?? null;
       setOrgId(activeOrgId);
 
@@ -210,6 +226,40 @@ export default function AssetManagementPhase1() {
     } finally { setSaving(false); }
   };
 
+  const linkAssetToModel = async () => {
+    if (!orgId || !mapAssetId || !mapModelId) return;
+    const asset = tenantAssets.find((item) => item.id === mapAssetId && item.org_id === orgId);
+    const model = activeModels.find((item) => item.id === mapModelId && item.org_id === orgId);
+    if (!asset || !model) { setError("Choose an asset and canonical model from your organisation."); return; }
+    setSaving(true); setError("");
+    try {
+      const { error: updateError } = await supabase.from("assets").update({ model_id: model.id }).eq("org_id", orgId).eq("id", asset.id);
+      if (updateError) throw updateError;
+      const { error: eventError } = await supabase.from("asset_events").insert({ org_id: orgId, asset_id: asset.id, event_type: "model_normalization", from_value: asset.model_number || asset.make || null, to_value: model.canonical_name, notes: "Linked asset to canonical hardware model.", created_by: userId, created_by_name: actorName });
+      if (eventError) throw eventError;
+      setMapAssetId(""); setMapModelId("");
+      await loadWorkspace();
+    } catch (e: any) { setError(e?.message ?? "Unable to link asset to model."); }
+    finally { setSaving(false); }
+  };
+
+  const assignLegacyAsset = async (assetId: string) => {
+    const targetOrgId = legacyOrgSelections[assetId];
+    if (!isPlatformSuperAdmin || !targetOrgId) return;
+    const asset = assets.find((item) => item.id === assetId && item.org_id === null);
+    if (!asset) return;
+    const target = organizations.find((item) => item.id === targetOrgId);
+    if (!target || !window.confirm("Assign legacy asset " + asset.asset_tag + " to " + (target.organization_name || target.name) + "? Please verify the tenant before continuing.")) return;
+    setSaving(true); setError("");
+    try {
+      const { error: updateError } = await supabase.from("assets").update({ org_id: targetOrgId }).eq("id", assetId).is("org_id", null);
+      if (updateError) throw updateError;
+      setLegacyOrgSelections((current) => ({ ...current, [assetId]: "" }));
+      await loadWorkspace();
+    } catch (e: any) { setError(e?.message ?? "Unable to assign the legacy asset."); }
+    finally { setSaving(false); }
+  };
+
   const updateThreshold = async (modelId: string, value: string) => {
     if (!orgId) return;
     const threshold = Math.max(0, Number(value) || 0);
@@ -294,6 +344,7 @@ export default function AssetManagementPhase1() {
           </div>
 
           {tab === "workspace" && <div className="space-y-4">
+            {isPlatformSuperAdmin && tenantAssets.some((asset) => asset.org_id === null) && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><h4 className="font-black text-amber-900">Legacy assets need tenant assignment</h4><p className="mt-1 text-sm text-amber-800">These older records did not have an organisation stored. Choose the correct tenant for each record; the system will not guess and risk mixing company data.</p><div className="mt-3 space-y-2">{tenantAssets.filter((asset) => asset.org_id === null).map((asset) => <div key={asset.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-white p-3"><div className="min-w-40 flex-1"><div className="font-bold">{asset.asset_tag} · {asset.device_name}</div><div className="text-xs text-slate-500">{asset.location} · {asset.status}</div></div><select value={legacyOrgSelections[asset.id] || ""} onChange={(e) => setLegacyOrgSelections((current) => ({ ...current, [asset.id]: e.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">Choose tenant…</option>{organizations.map((org) => <option key={org.id} value={org.id}>{org.organization_name || org.name}</option>)}</select><button type="button" disabled={saving || !legacyOrgSelections[asset.id]} onClick={() => void assignLegacyAsset(asset.id)} className="rounded-xl bg-amber-700 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Assign tenant</button></div>)}</div></div>}
             {lowStockRows.length > 0 && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4"><div className="flex items-center gap-2 font-black text-rose-800"><AlertTriangle size={18} /> Low-stock warning</div><p className="mt-1 text-sm text-rose-700">Available stock is at or below the reorder threshold for these model/location combinations.</p><div className="mt-3 space-y-2">{lowStockRows.map((row) => <div key={row.key} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/80 p-3 text-sm"><span className="font-bold text-slate-800">{row.manufacturer} {row.modelName} <span className="font-normal text-slate-500">· {row.location}</span></span><span className="font-black text-rose-700">{row.available} available / threshold {row.threshold}</span></div>)}</div></div>}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="border-b border-slate-100 p-4"><h4 className="font-black text-slate-900">Stock by hardware model and location</h4><p className="mt-1 text-xs text-slate-500">Available stock counts assets with status In Storage, In Stock, or Available. Set a threshold in Hardware Models.</p></div>
               {stockRows.length === 0 ? <p className="p-6 text-sm text-slate-500">No assets are registered for this organisation yet.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Manufacturer / model</th><th className="p-3">Location</th><th className="p-3">Available</th><th className="p-3">Reorder threshold</th><th className="p-3">Status</th></tr></thead><tbody>{stockRows.map((row) => <tr key={row.key} className="border-t border-slate-100"><td className="p-3 font-semibold">{row.manufacturer} {row.modelName}</td><td className="p-3">{row.location}</td><td className="p-3 font-black">{row.available}</td><td className="p-3">{row.threshold || "Not set"}</td><td className="p-3">{row.modelId && row.threshold > 0 && row.available <= row.threshold ? <span className="rounded-full bg-rose-100 px-2 py-1 text-xs font-bold text-rose-700">Reorder</span> : <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">OK</span>}</td></tr>)}</tbody></table></div>}
@@ -311,6 +362,7 @@ export default function AssetManagementPhase1() {
             </div></div>
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><h4 className="font-black">Model catalogue</h4><div className="mt-3 space-y-2">{models.length === 0 ? <p className="text-sm text-slate-500">No canonical models yet.</p> : models.map((model) => <div key={model.id} className={`rounded-xl border p-3 ${model.merged_into_id ? "border-slate-100 bg-slate-50 text-slate-500" : "border-slate-200"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-bold">{model.manufacturer} {model.canonical_name}</div><div className="text-xs text-slate-500">{model.model_number || "No model number"} · {model.category}{model.merged_into_id ? " · merged duplicate" : ""}</div></div>{!model.merged_into_id && <label className="text-xs font-semibold text-slate-500">Reorder at<input type="number" min="0" defaultValue={model.reorder_threshold} onBlur={(e) => { if (Number(e.target.value) !== model.reorder_threshold) void updateThreshold(model.id, e.target.value); }} className="mt-1 w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900" /></label>}</div></div>)}</div></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><h4 className="font-black">Normalize existing assets</h4><p className="mt-1 text-xs text-slate-500">Map an asset's free-text make/model to one canonical hardware model.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><select value={mapAssetId} onChange={(e) => setMapAssetId(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">Choose existing asset</option>{tenantAssets.filter((a) => a.org_id === orgId && orgId).map((a) => <option key={a.id} value={a.id}>{a.asset_tag} · {a.make || "Unknown make"} {a.model_number || a.device_name}</option>)}</select><select value={mapModelId} onChange={(e) => setMapModelId(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">Choose canonical model</option>{activeModels.filter((m) => m.org_id === orgId).map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.canonical_name}</option>)}</select></div><button type="button" disabled={saving || !mapAssetId || !mapModelId} onClick={() => void linkAssetToModel()} className="mt-3 rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Link asset to model</button></div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><h4 className="font-black text-amber-900">Merge duplicate models</h4><p className="mt-1 text-xs text-amber-800">Assets are relinked to the canonical model. The duplicate model stays in history; hardware records are not deleted.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><select value={mergeSourceId} onChange={(e) => setMergeSourceId(e.target.value)} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm"><option value="">Duplicate model to merge</option>{activeModels.map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.canonical_name}</option>)}</select><select value={mergeTargetId} onChange={(e) => setMergeTargetId(e.target.value)} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm"><option value="">Canonical destination</option>{activeModels.map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.canonical_name}</option>)}</select></div><button type="button" disabled={saving || !mergeSourceId || !mergeTargetId || mergeSourceId === mergeTargetId} onClick={() => void mergeModels()} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><GitMerge size={16} /> Merge selected models</button></div>
             </div>
           </div>}
