@@ -112,6 +112,16 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState("");
   const [lastGpsUpdate, setLastGpsUpdate] = useState<string | null>(null);
+  const [siteName, setSiteName] = useState("");
+  const [siteLatitude, setSiteLatitude] = useState("");
+  const [siteLongitude, setSiteLongitude] = useState("");
+  const [siteRadius, setSiteRadius] = useState("150");
+  const [siteEnabled, setSiteEnabled] = useState(true);
+  const [siteEnforce, setSiteEnforce] = useState(true);
+  const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
+  const [siteSaving, setSiteSaving] = useState(false);
+  const [siteMessage, setSiteMessage] = useState("");
+  const canManageSites = ["Administrator", "Supervisor", "Super Admin", "Platform Super Admin"].includes(currentUserRole ?? "");
 
   const personMap = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
@@ -398,6 +408,11 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
             maxZoom: 19,
             attribution: "&copy; OpenStreetMap contributors",
           }).addTo(mapRef.current);
+          mapRef.current.on("click", (event: any) => {
+            setSiteLatitude(Number(event.latlng.lat).toFixed(6));
+            setSiteLongitude(Number(event.latlng.lng).toFixed(6));
+            setSiteMessage("Map pin selected. Complete the site details and save the geofence.");
+          });
         }
 
         Object.values(markersRef.current).forEach((marker: any) => marker.remove());
@@ -455,6 +470,75 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       }
     };
   }, []);
+
+  const resetSiteForm = () => {
+    setEditingSiteId(null);
+    setSiteName("");
+    setSiteLatitude("");
+    setSiteLongitude("");
+    setSiteRadius("150");
+    setSiteEnabled(true);
+    setSiteEnforce(true);
+    setSiteMessage("");
+  };
+
+  const useCurrentLocationForSite = () => {
+    if (!navigator.geolocation) {
+      setSiteMessage("This browser does not support GPS. Enter latitude and longitude manually.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setSiteLatitude(position.coords.latitude.toFixed(6));
+        setSiteLongitude(position.coords.longitude.toFixed(6));
+        setSiteMessage("Coordinates filled from this device's current GPS position. Confirm the pin is at the workplace.");
+      },
+      () => setSiteMessage("Could not read this device's location. Allow location permission or enter coordinates manually."),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
+  const saveSite = async () => {
+    if (!orgId) {
+      setSiteMessage("This account has no tenant assigned. Sign in again or contact the platform administrator.");
+      return;
+    }
+    const lat = Number(siteLatitude);
+    const lng = Number(siteLongitude);
+    const radius = Number(siteRadius);
+    if (!siteName.trim() || !siteLatitude.trim() || !siteLongitude.trim() ||
+        !Number.isFinite(lat) || lat < -90 || lat > 90 ||
+        !Number.isFinite(lng) || lng < -180 || lng > 180 ||
+        !Number.isFinite(radius) || radius <= 0) {
+      setSiteMessage("Enter a site name, valid latitude/longitude, and a radius greater than 0 metres.");
+      return;
+    }
+    setSiteSaving(true);
+    setSiteMessage("");
+    const payload = {
+      name: siteName.trim(),
+      latitude: lat,
+      longitude: lng,
+      radius_m: radius,
+      enabled: siteEnabled,
+      enforce_geofence: siteEnforce,
+      org_id: orgId,
+      created_by: currentUserId,
+      updated_at: new Date().toISOString(),
+    };
+    const result = editingSiteId
+      ? await supabase.from("workforce_sites").update(payload).eq("id", editingSiteId).eq("org_id", orgId)
+      : await supabase.from("workforce_sites").insert(payload);
+    setSiteSaving(false);
+    if (result.error) {
+      console.error("Geofence save error:", result.error);
+      setSiteMessage("Could not save geofence: " + result.error.message);
+      return;
+    }
+    setSiteMessage(editingSiteId ? "Geofence updated successfully." : "Geofence created successfully.");
+    resetSiteForm();
+    await refreshAttendance();
+  };
 
   const liveCount = locations.filter(
     (row) => Date.now() - new Date(row.last_seen_at).getTime() <= 60000
@@ -607,6 +691,55 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
           <div className="mt-4 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 flex gap-2">
             <ShieldCheck size={15} className="shrink-0 text-emerald-600" />
             GPS data is restricted by the existing WorkforceIQ tenant RLS policies.
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-emerald-100 bg-emerald-50 p-4 sm:p-5">
+          <h3 className="text-lg font-black text-emerald-950">Manage workplace geofences</h3>
+          <p className="mt-1 text-sm text-emerald-800">Create a circular clock-in boundary for each Lemon Tree workplace. Tap a point on the map above to fill its coordinates, or use this device's GPS.</p>
+        </div>
+        <div className="p-4 sm:p-5 space-y-4">
+          {canManageSites ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="text-sm font-bold text-slate-700">Site / branch name
+                  <input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="e.g. Lemon Tree Johannesburg" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 font-normal" />
+                </label>
+                <label className="text-sm font-bold text-slate-700">Radius (metres)
+                  <input type="number" min="1" value={siteRadius} onChange={(e) => setSiteRadius(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 font-normal" />
+                </label>
+                <label className="text-sm font-bold text-slate-700">Latitude
+                  <input type="number" step="any" value={siteLatitude} onChange={(e) => setSiteLatitude(e.target.value)} placeholder="-26.2041" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 font-normal" />
+                </label>
+                <label className="text-sm font-bold text-slate-700">Longitude
+                  <input type="number" step="any" value={siteLongitude} onChange={(e) => setSiteLongitude(e.target.value)} placeholder="28.0473" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 font-normal" />
+                </label>
+              </div>
+              <button type="button" onClick={useCurrentLocationForSite} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold hover:bg-slate-50">Use this device's GPS</button>
+              <div className="flex flex-wrap gap-4">
+                <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={siteEnabled} onChange={(e) => setSiteEnabled(e.target.checked)} /> Site enabled</label>
+                <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={siteEnforce} onChange={(e) => setSiteEnforce(e.target.checked)} /> Enforce at clock-in</label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={siteSaving} onClick={() => void saveSite()} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50">{siteSaving ? "Saving…" : editingSiteId ? "Update geofence" : "Save geofence"}</button>
+                {editingSiteId && <button type="button" onClick={resetSiteForm} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold">Cancel edit</button>}
+              </div>
+              {siteMessage && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{siteMessage}</div>}
+            </>
+          ) : <p className="text-sm text-amber-800">Your role can view geofence audits but cannot manage workplace boundaries.</p>}
+          <div className="space-y-2">
+            <div className="font-black text-slate-900">Configured sites ({sites.length})</div>
+            {sites.length === 0 ? <p className="text-sm text-slate-500">No geofences configured yet. Create the first one above.</p> : sites.map((site) => (
+              <div key={site.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-slate-200 p-3">
+                <div>
+                  <div className="font-bold text-slate-900">{site.name}</div>
+                  <div className="text-xs text-slate-500">{site.latitude?.toFixed(6)}, {site.longitude?.toFixed(6)} · {site.radius_m}m radius · {site.enabled ? "Enabled" : "Disabled"} · {site.enforce_geofence ? "Clock-in enforced" : "Audit only"}</div>
+                </div>
+                {canManageSites && <button type="button" onClick={() => { setEditingSiteId(site.id); setSiteName(site.name); setSiteLatitude(String(site.latitude ?? "")); setSiteLongitude(String(site.longitude ?? "")); setSiteRadius(String(site.radius_m ?? 150)); setSiteEnabled(site.enabled); setSiteEnforce(site.enforce_geofence); setSiteMessage(""); }} className="self-start rounded-lg border border-slate-300 px-3 py-2 text-xs font-black hover:bg-slate-50">Edit site</button>}
+              </div>
+            ))}
           </div>
         </div>
       </div>
