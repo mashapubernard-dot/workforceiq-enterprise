@@ -30,6 +30,7 @@ export default function WorkforceLocationTracker({
     let lastPingAt = 0;
     let checking = false;
     let writing = false;
+    let gpsHeartbeatId: number | null = null;
 
     const stopWatch = () => {
       if (watchId !== null && navigator.geolocation) {
@@ -126,6 +127,16 @@ export default function WorkforceLocationTracker({
         (error) => console.warn("Workforce GPS unavailable; allow location access for live map:", error.message),
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
       );
+      if (gpsHeartbeatId === null) {
+        gpsHeartbeatId = window.setInterval(() => {
+          if (cancelled || !navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(
+            (position) => void savePosition(position),
+            (error) => console.warn("Workforce GPS heartbeat failed:", error.message),
+            { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+          );
+        }, 15000);
+      }
     };
 
     const initialize = async () => {
@@ -167,6 +178,7 @@ export default function WorkforceLocationTracker({
     return () => {
       cancelled = true;
       if (intervalId !== null) window.clearInterval(intervalId);
+      if (gpsHeartbeatId !== null) window.clearInterval(gpsHeartbeatId);
       stopWatch();
       // The live dashboard considers a user offline when their last GPS ping is stale.
       // Do not delete the session or its last known location on logout/navigation.
