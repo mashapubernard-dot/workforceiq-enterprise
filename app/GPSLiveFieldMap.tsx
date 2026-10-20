@@ -64,6 +64,43 @@ type Props = {
 
 const DEFAULT_CENTER: [number, number] = [-30.5595, 22.9375];
 
+function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getLiveFenceResult(row: LocationRow, sites: Site[]) {
+  if (typeof row.last_latitude !== "number" || typeof row.last_longitude !== "number") {
+    return { label: "No live GPS", inside: false, distance: null as number | null, siteName: null as string | null };
+  }
+  const enabledSites = sites.filter(
+    (site) => site.enabled && typeof site.latitude === "number" && typeof site.longitude === "number"
+  );
+  if (enabledSites.length === 0) {
+    return { label: "No geofence configured", inside: false, distance: null, siteName: null };
+  }
+  const nearest = enabledSites
+    .map((site) => ({
+      site,
+      distance: distanceMeters(row.last_latitude!, row.last_longitude!, site.latitude!, site.longitude!),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  const insideSite = enabledSites
+    .map((site) => ({
+      site,
+      distance: distanceMeters(row.last_latitude!, row.last_longitude!, site.latitude!, site.longitude!),
+    }))
+    .find((item) => item.distance <= Number(item.site.radius_m ?? 150));
+  return insideSite
+    ? { label: "Inside geofence", inside: true, distance: Math.round(insideSite.distance), siteName: insideSite.site.name }
+    : { label: "Outside geofence", inside: false, distance: Math.round(nearest.distance), siteName: nearest.site.name };
+}
+
 function loadLeaflet(): Promise<any> {
   if (typeof window === "undefined") return Promise.reject(new Error("Browser only"));
   if (window.L) return Promise.resolve(window.L);
@@ -435,9 +472,10 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
 
           const ageSeconds = Math.max(0, Math.round((Date.now() - new Date(row.last_seen_at).getTime()) / 1000));
           const state = ageSeconds <= 60 ? "Live" : ageSeconds <= 180 ? "Recent" : "Stale";
+          const fence = getLiveFenceResult(row, sites);
 
           marker.bindPopup(
-            `<div style="min-width:220px"><strong>${name}</strong><br/>Device: ${device?.device_name ?? "Unregistered device"}<br/>MAC: ${device?.mac_address ?? "—"}<br/>IP: ${device?.ip_address ?? "—"}<br/>Status: ${row.status ?? "Online"}<br/>Signal: ${state}<br/>Last GPS ping: ${new Date(row.last_seen_at).toLocaleTimeString()}</div>`
+            `<div style="min-width:220px"><strong>${name}</strong><br/>Device: ${device?.device_name ?? "Unregistered device"}<br/>MAC: ${device?.mac_address ?? "—"}<br/>IP: ${device?.ip_address ?? "—"}<br/>Status: ${row.status ?? "Online"}<br/>Signal: ${state}<br/>Live geofence: ${fence.label}<br/>Nearest site: ${fence.siteName ?? "—"}<br/>Distance: ${fence.distance == null ? "—" : fence.distance + "m"}<br/>Last GPS ping: ${new Date(row.last_seen_at).toLocaleTimeString()}</div>`
           );
           markersRef.current[markerKey] = marker;
         });
@@ -540,9 +578,15 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
     await refreshAttendance();
   };
 
-  const liveCount = locations.filter(
+  const liveLocations = locations.filter(
     (row) => Date.now() - new Date(row.last_seen_at).getTime() <= 60000
-  ).length;
+  );
+  const liveCount = liveLocations.length;
+  const liveInsideCount = liveLocations.filter((row) => getLiveFenceResult(row, sites).inside).length;
+  const liveOutsideCount = liveLocations.filter((row) => {
+    const result = getLiveFenceResult(row, sites);
+    return result.label === "Outside geofence";
+  }).length;
 
   return (
     <section className={compact ? "space-y-4" : "space-y-5"}>
@@ -589,11 +633,12 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-white/10">
-          <div className="p-4"><div className="text-xs text-slate-400">Live</div><div className="text-2xl font-black">{liveCount}</div></div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border-t border-white/10">
+          <div className="p-4"><div className="text-xs text-slate-400">Live GPS</div><div className="text-2xl font-black">{liveCount}</div></div>
+          <div className="p-4 border-l border-white/10"><div className="text-xs text-emerald-200">Inside geofence</div><div className="text-2xl font-black">{liveInsideCount}</div></div>
+          <div className="p-4 border-l border-white/10"><div className="text-xs text-red-200">Outside geofence</div><div className="text-2xl font-black">{liveOutsideCount}</div></div>
           <div className="p-4 border-l border-white/10"><div className="text-xs text-slate-400">Tracked</div><div className="text-2xl font-black">{locations.length}</div></div>
-          <div className="p-4 border-l border-white/10"><div className="text-xs text-slate-400">Tenant</div><div className="text-sm font-black mt-1">{orgId ? "Protected" : "—"}</div></div>
-          <div className="p-4 border-l border-white/10"><div className="text-xs text-slate-400">Last GPS</div><div className="text-sm font-black mt-1">{lastGpsUpdate ? new Date(lastGpsUpdate).toLocaleTimeString() : "Waiting"}</div></div>
+          <div className="p-4 border-l border-white/10"><div className="text-xs text-slate-400">Last GPS</div><div className="text-sm font-black mt-1">{lastGpsUpdate ? new Date(lastGpsUpdate).toLocaleTimeString() : "Waiting for this device"}</div></div>
         </div>
       </div>
 
@@ -679,8 +724,14 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
                     <div className="text-xs text-slate-500 mt-1">
                       {row.last_latitude?.toFixed(5)}, {row.last_longitude?.toFixed(5)}
                     </div>
+                    {(() => {
+                      const fence = getLiveFenceResult(row, sites);
+                      return <div className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${fence.inside ? "bg-emerald-100 text-emerald-700" : fence.label === "Outside geofence" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+                        {fence.label}{fence.distance != null ? ` · ${fence.distance}m from ${fence.siteName}` : ""}
+                      </div>;
+                    })()}
                     <div className="text-[11px] text-slate-400 mt-1">
-                      {new Date(row.last_seen_at).toLocaleString()}
+                      Last GPS ping: {new Date(row.last_seen_at).toLocaleString()}
                     </div>
                   </button>
                 );
