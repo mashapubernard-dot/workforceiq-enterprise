@@ -491,6 +491,16 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
                   GPS active
                 </span>
               )}
+              {gpsPermission === "denied" && (
+                <span className="inline-flex items-center gap-2 rounded-xl bg-red-500/20 border border-red-400/30 px-3 py-2 text-sm font-black text-red-100">
+                  GPS permission denied
+                </span>
+              )}
+              {gpsPermission === "granted" && (
+                <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 px-3 py-2 text-sm font-black text-emerald-100">
+                  GPS permission granted
+                </span>
+              )}
             </div>
           </div>
         </div>
