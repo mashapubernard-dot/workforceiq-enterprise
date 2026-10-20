@@ -219,3 +219,37 @@ header .overflow-x-auto {
     width: min(18rem, 88vw);
   }
 }
+
+
+/* === TIME & ATTENDANCE POLISH ===
+   Presentation-only refinements; clock actions, timers, GPS checks,
+   status limits, and attendance data logic remain unchanged.
+*/
+div[class*="grid-cols-2"][class*="xl:grid-cols-6"] > button {
+  min-height: 8.5rem;
+  border-radius: 1.125rem;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  touch-action: manipulation;
+}
+
+div[class*="grid-cols-2"][class*="xl:grid-cols-6"] > button:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+div[class*="grid-cols-2"][class*="xl:grid-cols-6"] > button:disabled {
+  cursor: not-allowed;
+}
+
+div[class*="grid-cols-1"][class*="sm:grid-cols-3"] > div[class*="bg-white/10"] {
+  min-width: 0;
+  border-radius: 1rem;
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 640px) {
+  div[class*="grid-cols-2"][class*="xl:grid-cols-6"] > button {
+    min-height: 7.25rem;
+    padding: 0.875rem;
+  }
+}
