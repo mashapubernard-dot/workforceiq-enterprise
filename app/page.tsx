@@ -56,6 +56,7 @@ import IQAutomationMachine from "./IQAutomationMachine";
 import MasterAdminBilling from "./MasterAdminBilling";
 import GPSLiveFieldMap from "./GPSLiveFieldMap";
 import WorkforceLocationTracker from "./WorkforceLocationTracker";
+import AssetManagementPhase1 from "./AssetManagementPhase1";
  
 type Role =
   | "Administrator"
@@ -348,6 +349,7 @@ const allNavItems = [
       "Administrator",
       "Supervisor",
       "Team Leader",
+      "Employee",
     ] as Role[],
     color: "from-teal-600 to-cyan-700",
     light: "bg-teal-50 text-teal-700 border-teal-200",
@@ -1201,6 +1203,7 @@ export default function Home() {
  
   type AssetRecord = {
     id: string;
+    org_id?: string | null;
     asset_tag: string;
     device_name: string;
     serial_number: string | null;
@@ -1211,8 +1214,15 @@ export default function Home() {
     status: string;
     assigned_to: string;
     location: string;
-    warranty_expires: string;
+    warranty_expires: string | null;
     notes: string;
+    cost_center?: string | null;
+    purchase_order?: string | null;
+    purchase_date?: string | null;
+    purchase_cost?: number | null;
+    ownership_type?: string;
+    ip_address?: string | null;
+    model_id?: string | null;
     created_at: string;
   };
  
@@ -1230,6 +1240,12 @@ export default function Home() {
     assigned_to: "",
     location: "",
     warranty_expires: "",
+    cost_center: "",
+    purchase_order: "",
+    purchase_date: "",
+    purchase_cost: "",
+    ownership_type: "Owned",
+    ip_address: "",
     notes: "",
   });
   const [showAssetForm, setShowAssetForm] = useState(false);
@@ -3505,7 +3521,7 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from("assets")
-        .select("id,asset_tag,device_name,serial_number,mac_address,model_number,make,category,status,assigned_to,location,warranty_expires,notes,created_at")
+        .select("id,org_id,asset_tag,device_name,serial_number,mac_address,model_number,make,category,status,assigned_to,location,warranty_expires,notes,cost_center,purchase_order,purchase_date,purchase_cost,ownership_type,ip_address,model_id,created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setAssets((data ?? []) as AssetRecord[]);
@@ -3531,6 +3547,12 @@ export default function Home() {
         assigned_to: assetForm.assigned_to.trim(),
         location: assetForm.location.trim(),
         warranty_expires: assetForm.warranty_expires || null,
+        cost_center: assetForm.cost_center.trim() || null,
+        purchase_order: assetForm.purchase_order.trim() || null,
+        purchase_date: assetForm.purchase_date || null,
+        purchase_cost: assetForm.purchase_cost.trim() ? Number(assetForm.purchase_cost) : null,
+        ownership_type: assetForm.ownership_type,
+        ip_address: assetForm.ip_address.trim() || null,
         notes: assetForm.notes.trim(),
       });
       if (error) throw error;
@@ -3546,6 +3568,12 @@ export default function Home() {
         assigned_to: "",
         location: "",
         warranty_expires: "",
+        cost_center: "",
+        purchase_order: "",
+        purchase_date: "",
+        purchase_cost: "",
+        ownership_type: "Owned",
+        ip_address: "",
         notes: "",
       });
       setShowAssetForm(false);
@@ -9643,7 +9671,7 @@ export default function Home() {
                     <input
                       value={assetForm.assigned_to}
                       onChange={(e) => setAssetForm((f) => ({ ...f, assigned_to: e.target.value }))}
-                      placeholder="Assigned to"
+                      placeholder="Assigned owner / employee"
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
                     <input
@@ -9658,6 +9686,50 @@ export default function Home() {
                       onChange={(e) => setAssetForm((f) => ({ ...f, warranty_expires: e.target.value }))}
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
+                    <input
+                      value={assetForm.ip_address}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, ip_address: e.target.value }))}
+                      placeholder="IP address (technical / operational)"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={assetForm.cost_center}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, cost_center: e.target.value }))}
+                      placeholder="Cost centre"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={assetForm.purchase_order}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, purchase_order: e.target.value }))}
+                      placeholder="Purchase order"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="date"
+                      value={assetForm.purchase_date}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, purchase_date: e.target.value }))}
+                      aria-label="Purchase date"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={assetForm.purchase_cost}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, purchase_cost: e.target.value }))}
+                      placeholder="Purchase cost"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <select
+                      value={assetForm.ownership_type}
+                      onChange={(e) => setAssetForm((f) => ({ ...f, ownership_type: e.target.value }))}
+                      aria-label="Ownership type"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    >
+                      <option>Owned</option>
+                      <option>Leased</option>
+                      <option>Rented</option>
+                    </select>
                     <input
                       value={assetForm.notes}
                       onChange={(e) => setAssetForm((f) => ({ ...f, notes: e.target.value }))}
@@ -9755,6 +9827,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+              <AssetManagementPhase1 />
             </div>
           )}
  
