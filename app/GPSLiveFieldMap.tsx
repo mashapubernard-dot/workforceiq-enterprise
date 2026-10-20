@@ -240,7 +240,7 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
     setGpsPermission("granted");
     setLastGpsUpdate(new Date().toISOString());
     await refreshLocations();
-  }, [currentUserId, orgId, refreshLocations]);
+  }, [currentUserId, currentUserRole, orgId, refreshLocations]);
 
   useEffect(() => {
     let cancelled = false;
@@ -315,13 +315,16 @@ export default function GPSLiveFieldMap({ compact = false }: Props) {
       )
       .subscribe();
 
-    const timer = window.setInterval(() => void refreshLocations(), 15000);
+    const timer = window.setInterval(() => {
+      void refreshLocations();
+      void refreshAttendance();
+    }, 15000);
 
     return () => {
       window.clearInterval(timer);
       void supabase.removeChannel(channel);
     };
-  }, [refreshLocations]);
+  }, [refreshLocations, refreshAttendance]);
 
   useEffect(() => {
     if (!tracking || !currentUserId || currentUserRole === "Super Admin" || currentUserRole === "Platform Super Admin") {
