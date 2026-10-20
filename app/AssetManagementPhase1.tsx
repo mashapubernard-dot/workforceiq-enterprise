@@ -149,7 +149,7 @@ export default function AssetManagementPhase1() {
 
   useEffect(() => { void loadWorkspace(); }, [loadWorkspace]);
 
-  const tenantAssets = useMemo(() => assets.filter((asset) => orgId ? asset.org_id === orgId : asset.org_id === null), [assets, orgId]);
+  const tenantAssets = useMemo(() => assets.filter((asset) => (orgId && asset.org_id === orgId) || (isPlatformSuperAdmin && asset.org_id === null)), [assets, orgId, isPlatformSuperAdmin]);
   const activeModels = useMemo(() => models.filter((model) => !model.merged_into_id), [models]);
   const selectedAsset = tenantAssets.find((asset) => asset.id === selectedAssetId) ?? tenantAssets[0];
 
