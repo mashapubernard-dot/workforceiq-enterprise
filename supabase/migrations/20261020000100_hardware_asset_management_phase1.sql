@@ -178,7 +178,7 @@ begin
   end if;
 
   if old.assigned_to is distinct from new.assigned_to then
-    insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by)
+    insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by, created_by_name)
     values (
       new.org_id, new.id,
       case when nullif(btrim(new.assigned_to), '') is null then 'return'
@@ -190,7 +190,7 @@ begin
   end if;
 
   if old.location is distinct from new.location then
-    insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by)
+    insert into public.asset_events (org_id, asset_id, event_type, from_value, to_value, notes, created_by, created_by_name)
     values (
       new.org_id, new.id, 'transfer', old.location, new.location, 'Asset location updated.', auth.uid(),
       (select coalesce(up.full_name, up.email) from public.user_profiles up where up.id = auth.uid())
