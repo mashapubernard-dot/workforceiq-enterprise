@@ -350,6 +350,8 @@ const allNavItems = [
       "Supervisor",
       "Team Leader",
       "Employee",
+      "Super Admin",
+      "Platform Super Admin",
     ] as Role[],
     color: "from-teal-600 to-cyan-700",
     light: "bg-teal-50 text-teal-700 border-teal-200",
