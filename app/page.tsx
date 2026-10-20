@@ -3377,7 +3377,30 @@ export default function Home() {
                 .trim(),
             };
           });
-        setFieldWorkOrders(fieldServiceOrders);
+        const { data: evidenceRows, error: evidenceLoadError } = await supabase.from("field_job_evidence").select("ticket_id,evidence_type,storage_path,signer_name,captured_at").order("created_at", { ascending: true });
+        if (evidenceLoadError) {
+          console.error("Field evidence load error:", evidenceLoadError);
+          setFieldWorkOrders(fieldServiceOrders);
+        } else {
+          const hydrated = await Promise.all(fieldServiceOrders.map(async (order) => {
+            const next: FieldWorkOrder = { ...order, photoProofDataUrls: [], photoProofStoragePaths: [] };
+            for (const row of (evidenceRows ?? []).filter((item: any) => String(item.ticket_id) === String(order.ticketId))) {
+              const { data: urlData, error: urlError } = await supabase.storage.from("field-job-photos").createSignedUrl(row.storage_path, 604800);
+              if (urlError || !urlData?.signedUrl) continue;
+              if (row.evidence_type === "signature") {
+                next.signatureDataUrl = urlData.signedUrl;
+                next.signatureStoragePath = row.storage_path;
+                next.signedBy = row.signer_name || "Customer";
+                next.signedAt = row.captured_at;
+              } else {
+                next.photoProofDataUrls = [...(next.photoProofDataUrls ?? []), urlData.signedUrl];
+                next.photoProofStoragePaths = [...(next.photoProofStoragePaths ?? []), row.storage_path];
+              }
+            }
+            return next;
+          }));
+          setFieldWorkOrders(hydrated);
+        }
  
         // Rebuild HR cases from the same persisted tickets so HR never falls back
         // into the Service Hub after a refresh.
