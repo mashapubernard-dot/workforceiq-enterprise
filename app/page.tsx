@@ -2286,13 +2286,10 @@ export default function Home() {
           false
         );
  
-        await loadWorkforce(
-          userProfile
-        );
- 
-        await loadSchedules(
-          userProfile
-        );
+        if (userProfile.role !== "Platform Super Admin") {
+          await loadWorkforce(userProfile);
+          await loadSchedules(userProfile);
+        }
       } catch (error) {
         console.error(
           "User loading error:",
