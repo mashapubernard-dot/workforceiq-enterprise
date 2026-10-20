@@ -9539,7 +9539,7 @@ export default function Home() {
                     onClick={() => setShowAssetForm((v) => !v)}
                     className="inline-flex items-center gap-2 rounded-full bg-white text-slate-900 px-4 py-2 text-sm font-bold hover:bg-teal-50 transition"
                   >
-                    <Plus size={16} /> Add New Asset
+                    <Plus size={16} /> Add Asset
                   </button>
                 </div>
                 <p className="text-teal-100 mt-2">
@@ -9564,8 +9564,12 @@ export default function Home() {
  
               {showAssetForm && (
                 <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-3">
-                  <h3 className="font-black text-lg">Register New Asset Details</h3>
+                  <h3 className="font-black text-lg">Register New Asset</h3>
                   <p className="text-sm text-slate-500">Enter the device identity details below. Serial number, MAC address, make, and model number are saved with the asset.</p>
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 mb-3">
+                    <div className="text-sm font-black text-teal-900">Register New Asset Details</div>
+                    <p className="text-xs text-teal-800 mt-1">Device name, serial number, MAC address, make / manufacturer, and model number are captured here.</p>
+                  </div>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <input
                       value={assetForm.asset_tag}
