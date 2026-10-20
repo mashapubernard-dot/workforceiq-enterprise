@@ -174,9 +174,11 @@ type FieldWorkOrder = {
   eta: string;
   notes: string;
   signatureDataUrl?: string;
+  signatureStoragePath?: string;
   signedBy?: string;
   signedAt?: string;
   photoProofDataUrls?: string[];
+  photoProofStoragePaths?: string[];
 };
 function getTicketDepartment(ticketType: string | null | undefined): TicketDepartment {
   if ((ticketType ?? "").trim().toLowerCase() === "hr") return "HR";
@@ -4110,52 +4112,93 @@ export default function Home() {
     }
   }
  
+  async function persistFieldWorkEvidence(
+    order: FieldWorkOrder,
+    dataUrl: string,
+    evidenceType: "before" | "after" | "signature",
+    signerName?: string
+  ) {
+    if (!profile) throw new Error("Please sign in again before saving field evidence.");
+    const { data: tenant, error: tenantError } = await supabase
+      .from("user_profiles")
+      .select("org_id")
+      .eq("id", profile.id)
+      .maybeSingle();
+    if (tenantError) throw tenantError;
+    if (!tenant?.org_id) throw new Error("Your account is not linked to an organization. Ask an administrator to check your profile.");
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    if (!authData.user) throw new Error("Your session expired. Please sign in again.");
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const extension = blob.type === "image/jpeg" ? "jpg" : "png";
+    const objectPath = `${tenant.org_id}/${order.ticketId}/${authData.user.id}/${evidenceType}-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from("field-job-photos")
+      .upload(objectPath, blob, { contentType: blob.type || "image/png", upsert: false });
+    if (uploadError) throw uploadError;
+    const { error: evidenceError } = await supabase.from("field_job_evidence").insert({
+      org_id: tenant.org_id,
+      ticket_id: Number(order.ticketId),
+      user_id: authData.user.id,
+      evidence_type: evidenceType,
+      storage_path: objectPath,
+      signer_name: evidenceType === "signature" ? (signerName?.trim() || "Customer") : null,
+    });
+    if (evidenceError) {
+      await supabase.storage.from("field-job-photos").remove([objectPath]);
+      throw evidenceError;
+    }
+    const { data: signedUrlData, error: urlError } = await supabase.storage
+      .from("field-job-photos")
+      .createSignedUrl(objectPath, 60 * 60 * 24 * 7);
+    if (urlError) throw urlError;
+    return { objectPath, signedUrl: signedUrlData.signedUrl, userId: authData.user.id };
+  }
+
   async function saveFieldWorkOrderSignature(orderId: string, dataUrl: string, signedByName: string) {
     const order = fieldWorkOrders.find((item) => item.id === orderId);
     if (!order) return;
- 
-    setFieldWorkOrders((current) =>
-      current.map((item) =>
-        item.id === orderId
-          ? {
-              ...item,
-              signatureDataUrl: dataUrl,
-              signedBy: signedByName.trim() || "Customer",
-              signedAt: new Date().toISOString(),
-            }
-          : item
-      )
-    );
- 
-    await addTicketComment(
-      order.ticketId,
-      `Customer signature captured (signed by ${signedByName.trim() || "Customer"}).`,
-      { silent: true }
-    );
+    try {
+      const saved = await persistFieldWorkEvidence(order, dataUrl, "signature", signedByName);
+      const signedAt = new Date().toISOString();
+      setFieldWorkOrders((current) =>
+        current.map((item) =>
+          item.id === orderId
+            ? { ...item, signatureDataUrl: saved.signedUrl, signatureStoragePath: saved.objectPath, signedBy: signedByName.trim() || "Customer", signedAt }
+            : item
+        )
+      );
+      await addTicketComment(order.ticketId, `Customer signature saved to secure storage (signed by ${signedByName.trim() || "Customer"}).`, { silent: true });
+      window.alert("Customer signature saved successfully.");
+    } catch (error: any) {
+      console.error("Field signature upload failed:", error);
+      window.alert(error?.message ?? "Could not save the signature. Please try again.");
+    }
   }
- 
+
   async function addFieldWorkOrderPhotoProof(orderId: string, dataUrl: string) {
     const order = fieldWorkOrders.find((item) => item.id === orderId);
     if (!order) return;
- 
-    setFieldWorkOrders((current) =>
-      current.map((item) =>
-        item.id === orderId
-          ? {
-              ...item,
-              photoProofDataUrls: [...(item.photoProofDataUrls ?? []), dataUrl],
-            }
-          : item
-      )
-    );
- 
-    await addTicketComment(
-      order.ticketId,
-      `Photo proof attached (${(order.photoProofDataUrls?.length ?? 0) + 1} photo${
-        (order.photoProofDataUrls?.length ?? 0) + 1 === 1 ? "" : "s"
-      } total).`,
-      { silent: true }
-    );
+    try {
+      const saved = await persistFieldWorkEvidence(order, dataUrl, "after");
+      setFieldWorkOrders((current) =>
+        current.map((item) =>
+          item.id === orderId
+            ? {
+                ...item,
+                photoProofDataUrls: [...(item.photoProofDataUrls ?? []), saved.signedUrl],
+                photoProofStoragePaths: [...(item.photoProofStoragePaths ?? []), saved.objectPath],
+              }
+            : item
+        )
+      );
+      await addTicketComment(order.ticketId, `Field photo saved to secure storage (${(order.photoProofDataUrls?.length ?? 0) + 1} photo(s) total).`, { silent: true });
+      window.alert("Technician photo saved successfully.");
+    } catch (error: any) {
+      console.error("Field photo upload failed:", error);
+      window.alert(error?.message ?? "Could not save the photo. Please try again.");
+    }
   }
  
   function removeFieldWorkOrderPhotoProof(orderId: string, index: number) {
