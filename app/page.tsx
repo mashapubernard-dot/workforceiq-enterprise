@@ -54,6 +54,7 @@ import AdvancedWorkforcePlatform from "./AdvancedWorkforcePlatform";
 import IQCommandCenter from "./IQCommandCenter";
 import IQAutomationMachine from "./IQAutomationMachine";
 import MasterAdminBilling from "./MasterAdminBilling";
+import GPSLiveFieldMap from "./GPSLiveFieldMap";
  
 type Role =
   | "Administrator"
@@ -252,6 +253,18 @@ const allNavItems = [
     color: "from-emerald-500 to-teal-600",
     light: "bg-emerald-50 text-emerald-700 border-emerald-200",
     iconBg: "bg-emerald-100 text-emerald-600",
+  },
+  {
+    name: "GPS Live Field Map",
+    icon: MapPin,
+    roles: [
+      "Administrator",
+      "Supervisor",
+      "Team Leader",
+    ] as Role[],
+    color: "from-sky-500 to-blue-700",
+    light: "bg-sky-50 text-sky-700 border-sky-200",
+    iconBg: "bg-sky-100 text-sky-600",
   },
   {
     name: "EOD Report",
@@ -4914,6 +4927,11 @@ export default function Home() {
             </div>
           )}
  
+          {/* GPS LIVE FIELD MAP */}
+          {activeTab === "GPS Live Field Map" && profile && (
+            <GPSLiveFieldMap />
+          )}
+
           {/* DASHBOARD */}
           {activeTab ===
             "Dashboard" && (
