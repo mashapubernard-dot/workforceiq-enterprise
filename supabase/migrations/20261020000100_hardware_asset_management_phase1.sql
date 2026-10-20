@@ -38,6 +38,12 @@ create table if not exists public.asset_models (
   constraint asset_models_org_id_id_unique unique (org_id, id)
 );
 
+alter table public.asset_models
+  add constraint asset_models_merge_same_org_fkey
+  foreign key (org_id, merged_into_id)
+  references public.asset_models(org_id, id)
+  on delete restrict;
+
 create unique index if not exists asset_models_canonical_unique
   on public.asset_models (
     org_id,
@@ -64,6 +70,10 @@ create index if not exists assets_org_status_idx on public.assets(org_id, status
 alter table public.asset_events
   add column if not exists org_id uuid references public.organizations(id) on delete cascade,
   add column if not exists created_by_name text;
+
+alter table public.asset_events
+  add constraint asset_events_org_asset_fkey
+  foreign key (org_id, asset_id) references public.assets(org_id, id) on delete cascade;
 
 update public.asset_events e
 set org_id = a.org_id
@@ -120,6 +130,23 @@ begin
     end if;
 
     new.org_id := v_org_id;
+  end if;
+
+  if new.model_id is null and new.org_id is not null and nullif(btrim(new.make), '') is not null then
+    select model.id
+      into new.model_id
+      from public.asset_models model
+      where model.org_id = new.org_id
+        and model.merged_into_id is null
+        and (
+          lower(btrim(model.manufacturer)) = lower(btrim(new.make))
+          and (
+            (nullif(btrim(new.model_number), '') is not null and lower(btrim(coalesce(model.model_number, ''))) = lower(btrim(new.model_number)))
+            or lower(btrim(model.canonical_name)) = lower(btrim(coalesce(new.model_number, '')))
+          )
+        )
+      order by model.created_at
+      limit 1;
   end if;
 
   if new.assigned_owner_id is not null and new.org_id is not null then
