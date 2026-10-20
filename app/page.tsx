@@ -60,7 +60,8 @@ type Role =
   | "Supervisor"
   | "Team Leader"
   | "Employee"
-  | "Super Admin";
+  | "Super Admin"
+  | "Platform Super Admin";
  
 type AttendanceStatus =
   | "Working"
@@ -440,6 +441,7 @@ const allNavItems = [
     icon: ShieldCheck,
     roles: [
       "Super Admin",
+      "Platform Super Admin",
     ] as Role[],
     color: "from-fuchsia-700 to-purple-900",
     light: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
@@ -448,7 +450,7 @@ const allNavItems = [
   {
     name: "Platform Billing",
     icon: Receipt,
-    roles: ["Super Admin"] as Role[],
+    roles: ["Super Admin", "Platform Super Admin"] as Role[],
     color: "from-emerald-700 to-teal-900",
     light: "bg-emerald-50 text-emerald-700 border-emerald-200",
     iconBg: "bg-emerald-100 text-emerald-700",
@@ -2211,6 +2213,7 @@ export default function Home() {
             "Team Leader",
             "Employee",
             "Super Admin",
+            "Platform Super Admin",
           ];
  
         if (
@@ -2228,7 +2231,7 @@ export default function Home() {
         }
  
         const orgStatus = (profileData as any).organizations?.status ?? "Active";
-        if (profileData.role !== "Super Admin" && orgStatus !== "Active") {
+        if (!["Super Admin", "Platform Super Admin"].includes(profileData.role) && orgStatus !== "Active") {
           await supabase.auth.signOut();
           window.alert(
             orgStatus === "Terminated"
@@ -2453,7 +2456,7 @@ export default function Home() {
         });
 
       // Super Admin is the only role excluded from phone GPS tracking.
-      if (profile.role === "Super Admin") {
+      if (profile.role === "Super Admin" || profile.role === "Platform Super Admin") {
         if (isClockedIn) {
           const { error } = await supabase
             .from("attendance")
@@ -3614,7 +3617,7 @@ export default function Home() {
   }, [loadInvoicesFromSupabase, profile?.id]);
  
   const loadTenantData = useCallback(async () => {
-    if (profile?.role !== "Super Admin") return;
+    if (!["Super Admin", "Platform Super Admin"].includes(profile?.role ?? "")) return;
     setTenantDataLoading(true);
     try {
       const [orgsRes, peopleRes] = await Promise.all([
@@ -10090,7 +10093,7 @@ export default function Home() {
             </div>
           )}
 
-          {profile?.role === "Super Admin" && activeTab === "Platform Billing" && (
+          {(profile?.role === "Super Admin" || profile?.role === "Platform Super Admin") && activeTab === "Platform Billing" && (
             <MasterAdminBilling />
           )}
 
