@@ -62,6 +62,7 @@ import ServiceLevelReportingPanel from "./ServiceLevelReportingPanel";
 import PreventativeMaintenancePanel from "./PreventativeMaintenancePanel";
 import WorkforceForecastingPanel from "./WorkforceForecastingPanel";
 import SoftwareAssetManagementPanel from "./SoftwareAssetManagementPanel";
+import EnterpriseAssetManagementPanel from "./EnterpriseAssetManagementPanel";
  
 type Role =
   | "Administrator"
@@ -389,6 +390,14 @@ const allNavItems = [
     color: "from-indigo-600 to-blue-700",
     light: "bg-indigo-50 text-indigo-700 border-indigo-200",
     iconBg: "bg-indigo-100 text-indigo-600",
+  },
+  {
+    name: "Enterprise Asset Management",
+    icon: Building2,
+    roles: ["Administrator", "Supervisor", "Team Leader"] as Role[],
+    color: "from-amber-500 to-orange-700",
+    light: "bg-amber-50 text-amber-800 border-amber-200",
+    iconBg: "bg-amber-100 text-amber-700",
   },
   {
     name: "Software Asset Management",
@@ -9645,6 +9654,10 @@ export default function Home() {
               employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))}
               schedules={schedules}
             />
+          )}
+
+          {activeTab === "Enterprise Asset Management" && profile && (
+            <EnterpriseAssetManagementPanel />
           )}
 
           {activeTab === "Software Asset Management" && profile && (
