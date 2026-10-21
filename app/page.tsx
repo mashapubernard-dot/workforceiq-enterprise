@@ -56,6 +56,7 @@ import IQAutomationMachine from "./IQAutomationMachine";
 import MasterAdminBilling from "./MasterAdminBilling";
 import GPSLiveFieldMap from "./GPSLiveFieldMap";
 import WorkforceLocationTracker from "./WorkforceLocationTracker";
+import IntelligentSchedulingPanel from "./IntelligentSchedulingPanel";
  
 type Role =
   | "Administrator"
@@ -6100,6 +6101,12 @@ export default function Home() {
                 setTabComments={setTabComments}
                 tabNoteDraft={tabNoteDraft}
                 setTabNoteDraft={setTabNoteDraft}
+              />
+              <IntelligentSchedulingPanel
+                employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))}
+                schedules={schedules}
+                selectedDate={selectedDate || getDateKey(new Date())}
+                canManage={canEditSchedule}
               />
               <div className="rounded-3xl bg-gradient-to-br from-orange-500 via-amber-500 to-rose-600 p-6 text-white shadow-xl">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
