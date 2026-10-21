@@ -5624,13 +5624,13 @@ export default function Home() {
               )}
  
               {/* CLOCK CARD */}
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 p-6 sm:p-8 text-white shadow-xl">
-                <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-rose-950 to-red-950 p-6 sm:p-8 text-white shadow-xl">
+                <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-red-500/20 blur-3xl" />
  
                 <div className="relative">
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                     <div>
-                      <div className="flex items-center gap-2 text-blue-300 text-sm font-bold uppercase tracking-wider">
+                      <div className="flex items-center gap-2 text-red-200 text-sm font-bold uppercase tracking-wider">
                         <Clock3
                           size={17}
                         />
@@ -5659,7 +5659,7 @@ export default function Home() {
                       disabled={
                         clockActionLoading
                       }
-                      className={`px-7 py-4 rounded-2xl font-black text-lg shadow-xl transition hover:-translate-y-0.5 disabled:opacity-50 ${
+                      className={`w-full px-7 py-4 rounded-2xl font-black text-lg shadow-xl transition hover:-translate-y-0.5 disabled:opacity-50 ${
                         isClockedIn
                           ? "bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700"
                           : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700"
@@ -5742,7 +5742,7 @@ export default function Home() {
                   </p>
                 </div>
  
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-2 gap-3">
                   {statusOptions.map(
                     (status) => {
                       const isActive =
@@ -5883,53 +5883,23 @@ export default function Home() {
                 </div>
               </div>
  
-              {/* CURRENT STATUS */}
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-black text-slate-900 mb-5">
-                  My Current Status
-                </h3>
- 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-5">
-                    <div className="text-xs font-bold uppercase tracking-wider text-blue-500">
-                      status
-                    </div>
- 
-                    <div className="text-2xl font-black text-slate-900 mt-2">
-                      {
-                        getStatusLabel(
-                          currentStatus
-                        )
-                      }
+              {/* CURRENT STATUS — compact summary; timer values and calculations remain unchanged */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5">
+                <div className="rounded-2xl bg-gradient-to-r from-rose-50 to-white border border-rose-100 p-4 sm:p-5 flex items-center gap-4">
+                  <div className="h-14 w-14 shrink-0 rounded-full bg-red-600 text-white flex items-center justify-center shadow-sm">
+                    <Clock3 size={28} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500">My Current Status</div>
+                    <div className="text-2xl font-black text-slate-900 mt-1">{getStatusLabel(currentStatus)}</div>
+                    <div className="text-sm text-slate-500 mt-1">
+                      Status duration: {statusDuration} · Overall clock: {formatShortDuration(overallDuration)}
                     </div>
                   </div>
- 
-                  <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100 p-5">
-                    <div className="text-xs font-bold uppercase tracking-wider text-violet-500">
-                      status Duration
-                    </div>
- 
-                    <div className="text-2xl font-black text-slate-900 mt-2">
-                      {
-                        statusDuration
-                      }
-                    </div>
-                  </div>
- 
-                  <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 p-5">
-                    <div className="text-xs font-bold uppercase tracking-wider text-emerald-500">
-                      Overall Clock
-                    </div>
- 
-                    <div className="text-2xl font-black text-slate-900 mt-2">
-                      {
-                        formatShortDuration(overallDuration)
-                      }
-                    </div>
-                  </div>
+                  <ChevronRight className="text-red-600 shrink-0" size={24} />
                 </div>
               </div>
- 
+
               {/* TEAM STATUS */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <div className="flex items-center justify-between mb-5">
