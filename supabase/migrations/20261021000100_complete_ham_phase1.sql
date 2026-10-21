@@ -80,6 +80,15 @@ create policy asset_events_tenant_manage on public.asset_events for update to au
 using (public.is_workforce_manager() and exists (select 1 from public.assets a where a.id = asset_events.asset_id and a.org_id = public.current_user_org_id()))
 with check (public.is_workforce_manager() and exists (select 1 from public.assets a where a.id = asset_events.asset_id and a.org_id = public.current_user_org_id()));
 
+drop policy if exists hardware_models_tenant_select on public.hardware_models;
+drop policy if exists hardware_models_tenant_insert on public.hardware_models;
+drop policy if exists hardware_models_tenant_update on public.hardware_models;
+drop policy if exists hardware_models_tenant_delete on public.hardware_models;
+drop policy if exists asset_stock_tenant_select on public.asset_stock_levels;
+drop policy if exists asset_stock_tenant_insert on public.asset_stock_levels;
+drop policy if exists asset_stock_tenant_update on public.asset_stock_levels;
+drop policy if exists asset_stock_tenant_delete on public.asset_stock_levels;
+
 create policy hardware_models_tenant_select on public.hardware_models for select to authenticated using (org_id = public.current_user_org_id());
 create policy hardware_models_tenant_insert on public.hardware_models for insert to authenticated with check (org_id = public.current_user_org_id());
 create policy hardware_models_tenant_update on public.hardware_models for update to authenticated using (org_id = public.current_user_org_id() and public.is_workforce_manager()) with check (org_id = public.current_user_org_id() and public.is_workforce_manager());
