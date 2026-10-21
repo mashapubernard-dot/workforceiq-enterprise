@@ -58,6 +58,7 @@ import GPSLiveFieldMap from "./GPSLiveFieldMap";
 import WorkforceLocationTracker from "./WorkforceLocationTracker";
 import IntelligentSchedulingPanel from "./IntelligentSchedulingPanel";
 import IntradayManagementPanel from "./IntradayManagementPanel";
+import ServiceLevelReportingPanel from "./ServiceLevelReportingPanel";
  
 type Role =
   | "Administrator"
@@ -290,6 +291,14 @@ const allNavItems = [
     color: "from-violet-700 to-indigo-800",
     light: "bg-violet-50 text-violet-700 border-violet-200",
     iconBg: "bg-violet-100 text-violet-600",
+  },
+  {
+    name: "Service-Level Reporting",
+    icon: BarChart3,
+    roles: ["Administrator", "Supervisor"] as Role[],
+    color: "from-blue-600 to-indigo-700",
+    light: "bg-blue-50 text-blue-700 border-blue-200",
+    iconBg: "bg-blue-100 text-blue-600",
   },
   {
     name: "Intraday Management",
@@ -7152,6 +7161,11 @@ export default function Home() {
                 hrCases={hrCases}
               />
             </div>
+          )}
+
+          {/* SERVICE-LEVEL REPORTING */}
+          {activeTab === "Service-Level Reporting" && profile && (
+            <ServiceLevelReportingPanel tickets={tickets} />
           )}
 
           {/* INTRADAY MANAGEMENT */}
