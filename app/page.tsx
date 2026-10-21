@@ -57,6 +57,7 @@ import MasterAdminBilling from "./MasterAdminBilling";
 import GPSLiveFieldMap from "./GPSLiveFieldMap";
 import WorkforceLocationTracker from "./WorkforceLocationTracker";
 import IntelligentSchedulingPanel from "./IntelligentSchedulingPanel";
+import IntradayManagementPanel from "./IntradayManagementPanel";
  
 type Role =
   | "Administrator"
@@ -281,6 +282,17 @@ const allNavItems = [
     color: "from-violet-500 to-purple-600",
     light: "bg-violet-50 text-violet-700 border-violet-200",
     iconBg: "bg-violet-100 text-violet-600",
+  },
+  {
+    name: "Intraday Management",
+    icon: Activity,
+    roles: [
+      "Administrator",
+      "Supervisor",
+    ] as Role[],
+    color: "from-red-600 to-rose-700",
+    light: "bg-red-50 text-red-700 border-red-200",
+    iconBg: "bg-red-100 text-red-600",
   },
   {
     name: "Schedules",
@@ -7113,6 +7125,27 @@ export default function Home() {
           )}
  
  
+          {/* INTRADAY MANAGEMENT */}
+          {activeTab === "Intraday Management" && profile && (
+            <IntradayManagementPanel
+              employees={employees.map((employee) => ({
+                id: employee.id,
+                name: employee.name,
+                role: employee.role,
+                status: employee.status,
+                clockInAt: employee.clockInAt,
+                clockOut: employee.clockOut,
+                statusStartedAt: employee.statusStartedAt,
+              }))}
+              schedules={schedules}
+              loading={loadingEmployees || loadingSchedules}
+              onRefresh={() => {
+                void loadEmployees(profile);
+                void loadSchedules(profile);
+              }}
+            />
+          )}
+
           {/* ADVANCED WORKFORCE PLATFORM */}
           {activeTab === "Advanced Platform" && profile && (
             <AdvancedWorkforcePlatform
