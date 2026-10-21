@@ -46,6 +46,7 @@ import {
   Menu,
   Star,
   Receipt,
+  Building2,
 } from "lucide-react";
 import { supabase } from "../supabase/client";
 import OperationsControlPanel from "./OperationsControlPanel";
