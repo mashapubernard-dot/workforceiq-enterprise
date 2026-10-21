@@ -1278,6 +1278,12 @@ export default function Home() {
     assigned_to: "",
     location: "",
     warranty_expires: "",
+    purchase_date: "",
+    purchase_order: "",
+    cost_center: "",
+    purchase_cost: "",
+    ownership_type: "Company-owned",
+    assigned_owner: "",
     notes: "",
   });
   const [showAssetForm, setShowAssetForm] = useState(false);
@@ -3584,6 +3590,12 @@ export default function Home() {
         assigned_to: assetForm.assigned_to.trim(),
         location: assetForm.location.trim(),
         warranty_expires: assetForm.warranty_expires || null,
+        purchase_date: assetForm.purchase_date || null,
+        purchase_order: assetForm.purchase_order.trim() || null,
+        cost_center: assetForm.cost_center.trim() || null,
+        purchase_cost: assetForm.purchase_cost.trim() ? Number(assetForm.purchase_cost) : null,
+        ownership_type: assetForm.ownership_type,
+        assigned_owner: assetForm.assigned_owner.trim() || null,
         notes: assetForm.notes.trim(),
       });
       if (error) throw error;
@@ -3599,6 +3611,12 @@ export default function Home() {
         assigned_to: "",
         location: "",
         warranty_expires: "",
+        purchase_date: "",
+        purchase_order: "",
+        cost_center: "",
+        purchase_cost: "",
+        ownership_type: "Company-owned",
+        assigned_owner: "",
         notes: "",
       });
       setShowAssetForm(false);
@@ -9751,12 +9769,29 @@ export default function Home() {
                       placeholder="Location / branch"
                       className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                     />
-                    <input
-                      type="date"
-                      value={assetForm.warranty_expires}
-                      onChange={(e) => setAssetForm((f) => ({ ...f, warranty_expires: e.target.value }))}
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
+                    <label className="block text-sm font-semibold text-slate-700">Warranty expiry
+                      <input type="date" value={assetForm.warranty_expires} onChange={(e) => setAssetForm((f) => ({ ...f, warranty_expires: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal" />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Purchase date
+                      <input type="date" value={assetForm.purchase_date} onChange={(e) => setAssetForm((f) => ({ ...f, purchase_date: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal" />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Purchase order
+                      <input value={assetForm.purchase_order} onChange={(e) => setAssetForm((f) => ({ ...f, purchase_order: e.target.value }))} placeholder="PO number" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal" />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Cost centre
+                      <input value={assetForm.cost_center} onChange={(e) => setAssetForm((f) => ({ ...f, cost_center: e.target.value }))} placeholder="Cost centre" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal" />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Purchase cost
+                      <input value={assetForm.purchase_cost} onChange={(e) => setAssetForm((f) => ({ ...f, purchase_cost: e.target.value }))} type="number" min="0" step="0.01" placeholder="0.00" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal" />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Ownership
+                      <select value={assetForm.ownership_type} onChange={(e) => setAssetForm((f) => ({ ...f, ownership_type: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal">
+                        <option>Company-owned</option><option>Leased</option><option>Rented</option><option>Employee-owned</option>
+                      </select>
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">Assigned owner
+                      <input value={assetForm.assigned_owner} onChange={(e) => setAssetForm((f) => ({ ...f, assigned_owner: e.target.value }))} placeholder="Owner / employee" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal" />
+                    </label>
                     <input
                       value={assetForm.notes}
                       onChange={(e) => setAssetForm((f) => ({ ...f, notes: e.target.value }))}
