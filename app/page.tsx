@@ -3102,39 +3102,44 @@ export default function Home() {
             endDay
           );
  
+        let cycleDay = 0;
+
         while (
           cursor <= lastDate
         ) {
-          rows.push({
-            user_id:
-              scheduleForm.user_id,
-            schedule_date:
-              getDateKey(
-                cursor
-              ),
-            start_time:
-              scheduleForm.start_time,
-            end_time:
-              scheduleForm.end_time,
-            break_minutes:
-              breakMinutes,
-            shift_type:
-              scheduleForm.shift_type,
-            notes:
-              scheduleForm.notes ||
-              null,
-            created_by:
-              profile.id,
-          });
- 
-          // By default, schedule every calendar day. When the 2-days-off
-          // repeat option is enabled, schedule one work day then skip two.
-          cursor.setDate(
-            cursor.getDate() +
-              (scheduleForm.repeat_two_days_off ? 3 : 1)
-          );
+          // Repeat five consecutive scheduled days followed by two days off.
+          if (
+            !scheduleForm.repeat_two_days_off ||
+            cycleDay % 7 < 5
+          ) {
+            rows.push({
+              user_id:
+                scheduleForm.user_id,
+              schedule_date:
+                getDateKey(
+                  cursor
+                ),
+              start_time:
+                scheduleForm.start_time,
+              end_time:
+                scheduleForm.end_time,
+              break_minutes:
+                breakMinutes,
+              shift_type:
+                scheduleForm.shift_type,
+              notes:
+                scheduleForm.notes ||
+                null,
+              created_by:
+                profile.id,
+            });
+          }
+
+          // Visit every date to keep the repeating cycle aligned.
+          cycleDay += 1;
+          cursor.setDate(cursor.getDate() + 1);
         }
- 
+
         const {
           error,
         } = await supabase
@@ -11237,7 +11242,7 @@ This becomes the first entry in the permanent ticket conversation.
                         Repeat after 2 days off
                       </span>
                       <span className="block text-xs text-slate-500 mt-1">
-                        Schedule one work day, leave the next two calendar days off, then repeat until the end date.
+                        Schedule five consecutive work days, take the next two days off, then repeat the five-on/two-off cycle until the end date.
                       </span>
                     </span>
                   </label>
