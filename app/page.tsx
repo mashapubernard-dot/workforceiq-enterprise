@@ -59,6 +59,8 @@ import WorkforceLocationTracker from "./WorkforceLocationTracker";
 import IntelligentSchedulingPanel from "./IntelligentSchedulingPanel";
 import IntradayManagementPanel from "./IntradayManagementPanel";
 import ServiceLevelReportingPanel from "./ServiceLevelReportingPanel";
+import PreventativeMaintenancePanel from "./PreventativeMaintenancePanel";
+import WorkforceForecastingPanel from "./WorkforceForecastingPanel";
  
 type Role =
   | "Administrator"
@@ -370,6 +372,22 @@ const allNavItems = [
     color: "from-slate-500 to-gray-700",
     light: "bg-slate-50 text-slate-700 border-slate-200",
     iconBg: "bg-slate-100 text-slate-600",
+  },
+  {
+    name: "Preventative Maintenance",
+    icon: Wrench,
+    roles: ["Administrator", "Supervisor", "Team Leader"] as Role[],
+    color: "from-emerald-600 to-teal-700",
+    light: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    iconBg: "bg-emerald-100 text-emerald-600",
+  },
+  {
+    name: "Workforce Forecasting",
+    icon: Activity,
+    roles: ["Administrator", "Supervisor", "Team Leader"] as Role[],
+    color: "from-indigo-600 to-blue-700",
+    light: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    iconBg: "bg-indigo-100 text-indigo-600",
   },
   {
     name: "Asset Management",
@@ -9579,6 +9597,29 @@ export default function Home() {
             </div>
           )}
  
+          {activeTab === "Preventative Maintenance" && profile && (
+            <PreventativeMaintenancePanel
+              assets={assets.map((asset) => ({
+                id: asset.id,
+                asset_tag: asset.asset_tag,
+                device_name: asset.device_name,
+                category: asset.category,
+                status: asset.status,
+                location: asset.location,
+                warranty_expires: asset.warranty_expires,
+                created_at: asset.created_at,
+              }))}
+              tenantKey={profile.orgName || "organisation"}
+            />
+          )}
+
+          {activeTab === "Workforce Forecasting" && profile && (
+            <WorkforceForecastingPanel
+              employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))}
+              schedules={schedules}
+            />
+          )}
+
           {activeTab === "Asset Management" && (
             <div className="space-y-6">
               <div className="rounded-3xl bg-gradient-to-br from-teal-700 via-cyan-800 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
