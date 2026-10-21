@@ -123,3 +123,25 @@ end;
 $$;
 drop trigger if exists assets_record_registration on public.assets;
 create trigger assets_record_registration after insert on public.assets for each row execute function public.record_asset_registration();
+
+
+create or replace function public.record_asset_change()
+returns trigger language plpgsql security invoker as $$
+begin
+  if old.status is distinct from new.status then
+    insert into public.asset_events(asset_id, event_type, from_value, to_value, notes, created_by)
+    values (new.id, 'Status changed', old.status, new.status, 'Asset status updated', coalesce(auth.uid(), new.created_by));
+  end if;
+  if old.location is distinct from new.location then
+    insert into public.asset_events(asset_id, event_type, from_value, to_value, notes, created_by)
+    values (new.id, 'Location changed', old.location, new.location, 'Asset location updated', coalesce(auth.uid(), new.created_by));
+  end if;
+  if old.assigned_to is distinct from new.assigned_to then
+    insert into public.asset_events(asset_id, event_type, from_value, to_value, notes, created_by)
+    values (new.id, 'Assignment changed', old.assigned_to, new.assigned_to, 'Asset assignment updated', coalesce(auth.uid(), new.created_by));
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists assets_record_change on public.assets;
+create trigger assets_record_change after update on public.assets for each row execute function public.record_asset_change();
