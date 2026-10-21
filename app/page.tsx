@@ -61,6 +61,7 @@ import IntradayManagementPanel from "./IntradayManagementPanel";
 import ServiceLevelReportingPanel from "./ServiceLevelReportingPanel";
 import PreventativeMaintenancePanel from "./PreventativeMaintenancePanel";
 import WorkforceForecastingPanel from "./WorkforceForecastingPanel";
+import SoftwareAssetManagementPanel from "./SoftwareAssetManagementPanel";
  
 type Role =
   | "Administrator"
@@ -388,6 +389,14 @@ const allNavItems = [
     color: "from-indigo-600 to-blue-700",
     light: "bg-indigo-50 text-indigo-700 border-indigo-200",
     iconBg: "bg-indigo-100 text-indigo-600",
+  },
+  {
+    name: "Software Asset Management",
+    icon: BookOpen,
+    roles: ["Administrator", "Supervisor", "Team Leader"] as Role[],
+    color: "from-red-600 to-rose-700",
+    light: "bg-red-50 text-red-700 border-red-200",
+    iconBg: "bg-red-100 text-red-600",
   },
   {
     name: "Asset Management",
@@ -9636,6 +9645,10 @@ export default function Home() {
               employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))}
               schedules={schedules}
             />
+          )}
+
+          {activeTab === "Software Asset Management" && profile && (
+            <SoftwareAssetManagementPanel />
           )}
 
           {activeTab === "Asset Management" && (
