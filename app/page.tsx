@@ -284,6 +284,14 @@ const allNavItems = [
     iconBg: "bg-violet-100 text-violet-600",
   },
   {
+    name: "Automation Intelligence",
+    icon: Workflow,
+    roles: ["Administrator", "Supervisor"] as Role[],
+    color: "from-violet-700 to-indigo-800",
+    light: "bg-violet-50 text-violet-700 border-violet-200",
+    iconBg: "bg-violet-100 text-violet-600",
+  },
+  {
     name: "Intraday Management",
     icon: Activity,
     roles: [
@@ -7125,6 +7133,27 @@ export default function Home() {
           )}
  
  
+          {/* AUTOMATION INTELLIGENCE */}
+          {activeTab === "Automation Intelligence" && profile && (
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-violet-200 bg-gradient-to-r from-violet-950 via-indigo-950 to-slate-950 p-6 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-white/10 p-3"><Workflow size={24} /></div>
+                  <div>
+                    <h2 className="text-2xl font-black">Automation Intelligence</h2>
+                    <p className="mt-1 text-sm text-violet-200">Review operational signals and approve proposed actions. No external action is taken automatically.</p>
+                  </div>
+                </div>
+              </div>
+              <IQAutomationMachine
+                employees={employees}
+                tickets={tickets}
+                fieldWorkOrders={fieldWorkOrders}
+                hrCases={hrCases}
+              />
+            </div>
+          )}
+
           {/* INTRADAY MANAGEMENT */}
           {activeTab === "Intraday Management" && profile && (
             <IntradayManagementPanel
