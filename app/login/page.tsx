@@ -66,26 +66,7 @@ const completedFeatures = [
   { icon: BarChart3, title: "Reporting & Analytics", text: "Transform operational data into useful business insights." },
   { icon: PackageCheck, title: "Asset Management", text: "Track company devices, equipment and assets throughout their lifecycle." },
   { icon: BookOpen, title: "Knowledge Base", text: "Store procedures, guides and important information for your teams." },
-];
- 
-const roadmapFeatures = [
-  "GPS Live Field Map",
-  "Real Phone Integration",
-  "Notifications",
-  "Billing / Inventory / Revenue",
-  "Accurate Pauses",
-  "Intelligent Scheduling",
-  "Intraday Management",
-  "Automation Intelligence",
-  "Powerful Service-Level Reporting",
-  "Advanced Device Tracking",
-  "Live Field Technician Tracking",
-  "Asset Lifecycle Management",
-  "Preventative Maintenance Management",
-  "Workforce Forecasting",
-  "Mobile Workforce Experience",
-];
- 
+]; 
 const allowedRoles = new Set([
   "lemontreecorp administrator",
   "administrator",
@@ -277,9 +258,7 @@ export default function LoginPage() {
  
           <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 lg:flex">
             <a href="#solutions" className="transition hover:text-blue-700">Solutions</a>
-            <a href="#features" className="transition hover:text-blue-700">Features</a>
-            <a href="#roadmap" className="transition hover:text-blue-700">Roadmap</a>
-            <a href="#insights" className="transition hover:text-blue-700">Insights</a>
+            <a href="#features" className="transition hover:text-blue-700">Features</a>            <a href="#insights" className="transition hover:text-blue-700">Insights</a>
             <a href="#contact" className="transition hover:text-blue-700">Contact</a>
           </nav>
  
@@ -304,9 +283,7 @@ export default function LoginPage() {
           <div className="border-t border-slate-200 bg-white px-5 py-4 lg:hidden">
             <div className="flex flex-col gap-3 text-sm font-medium text-slate-700">
               <a href="#solutions" onClick={() => setMobileMenuOpen(false)}>Solutions</a>
-              <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
-              <a href="#roadmap" onClick={() => setMobileMenuOpen(false)}>Roadmap</a>
-              <a href="#insights" onClick={() => setMobileMenuOpen(false)}>Insights</a>
+              <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>              <a href="#insights" onClick={() => setMobileMenuOpen(false)}>Insights</a>
               <a href="#login" onClick={() => setMobileMenuOpen(false)}>Client Portal</a>
             </div>
           </div>
@@ -360,7 +337,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <div className="text-2xl font-black text-blue-700">15</div>
-                <div className="mt-1 text-xs font-medium text-slate-500">Roadmap improvements</div>
+                <div className="mt-1 text-xs font-medium text-slate-500">Workforce tools</div>
               </div>
               <div>
                 <div className="text-2xl font-black text-blue-700">1</div>
@@ -536,38 +513,6 @@ export default function LoginPage() {
                   </a>
                 </div>
               </article>
-            ))}
-          </div>
-        </div>
-      </section>
- 
-      {/* Roadmap */}
-      <section id="roadmap" className="bg-blue-800 py-20 text-white">
-        <div className="mx-auto max-w-7xl px-5 lg:px-8">
-          <div className="max-w-3xl">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
-              Product roadmap
-            </p>
-            <h2 className="mt-4 text-4xl font-black">
-              What WorklogIQ is building next.
-            </h2>
-            <p className="mt-5 leading-7 text-blue-100">
-              Our next development phase focuses on deeper intelligence,
-              automation, field visibility and workforce management.
-            </p>
-          </div>
- 
-          <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {roadmapFeatures.map((feature, index) => (
-              <div
-                key={feature}
-                className="flex items-center gap-4 border border-white/15 bg-white/10 p-5 backdrop-blur-sm"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-200/30 bg-cyan-300/10 text-xs font-black text-cyan-100">
-                  {String(index + 1).padStart(2, "0")}
-                </div>
-                <span className="text-sm font-semibold">{feature}</span>
-              </div>
             ))}
           </div>
         </div>
