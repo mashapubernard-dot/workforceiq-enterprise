@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, CheckCircle2, Clock3, Download, Filter, Ticket as TicketIcon } from "lucide-react";
 
 type Ticket = {
@@ -37,7 +37,11 @@ export default function ServiceLevelReportingPanel({ tickets }: Props) {
   const [department, setDepartment] = useState("All");
   const [priority, setPriority] = useState("All");
   const [showClosed, setShowClosed] = useState(false);
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const departments = useMemo(
     () => ["All", ...Array.from(new Set(tickets.map((t) => t.department).filter(Boolean))).sort()],
