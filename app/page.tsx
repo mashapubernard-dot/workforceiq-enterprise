@@ -3127,8 +3127,12 @@ export default function Home() {
               profile.id,
           });
  
-          // Create one schedule record for every calendar day, inclusive.
-          cursor.setDate(cursor.getDate() + 1);
+          // By default, schedule every calendar day. When the 2-days-off
+          // repeat option is enabled, schedule one work day then skip two.
+          cursor.setDate(
+            cursor.getDate() +
+              (scheduleForm.repeat_two_days_off ? 3 : 1)
+          );
         }
  
         const {
@@ -11213,13 +11217,30 @@ This becomes the first entry in the permanent ticket conversation.
               {!editingSchedule && (
                 <>
                   <p className="text-xs text-slate-500 -mt-2">
-                    This creates the same
-                    Shift for every day from
-                    The start date through the
-                    end date.
+                    By default, this creates the same shift for every day from the start date through the end date.
                   </p>
- 
 
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={scheduleForm.repeat_two_days_off}
+                      onChange={(event) =>
+                        setScheduleForm((current) => ({
+                          ...current,
+                          repeat_two_days_off: event.target.checked,
+                        }))
+                      }
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">
+                        Repeat after 2 days off
+                      </span>
+                      <span className="block text-xs text-slate-500 mt-1">
+                        Schedule one work day, leave the next two calendar days off, then repeat until the end date.
+                      </span>
+                    </span>
+                  </label>
                 </>
               )}
  
