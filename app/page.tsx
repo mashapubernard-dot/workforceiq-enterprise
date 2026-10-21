@@ -3127,12 +3127,8 @@ export default function Home() {
               profile.id,
           });
  
-          cursor.setDate(
-            cursor.getDate() +
-              (scheduleForm.repeat_two_days_off
-                ? 3
-                : 1)
-          );
+          // Create one schedule record for every calendar day, inclusive.
+          cursor.setDate(cursor.getDate() + 1);
         }
  
         const {
@@ -11223,43 +11219,7 @@ This becomes the first entry in the permanent ticket conversation.
                     end date.
                   </p>
  
-                  <label className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={
-                        scheduleForm.repeat_two_days_off
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setScheduleForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            repeat_two_days_off:
-                              event
-                                .target
-                                .checked,
-                          })
-                        )
-                      }
-                      className="h-4 w-4 accent-blue-600"
-                    />
- 
-                    <span>
-                      <span className="block font-bold text-blue-900">
-                        Repeat shift: 1 work
-                        Day + 2 days off
-                      </span>
- 
-                      <span className="block text-xs text-blue-700 mt-1">
-                        The shift repeats every
-                        3 days until the End
-                        Date.
-                      </span>
-                    </span>
-                  </label>
+
                 </>
               )}
  
