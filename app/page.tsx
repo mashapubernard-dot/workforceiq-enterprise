@@ -540,6 +540,57 @@ const allNavItems = [
   },
 ];
  
+const navGroups = [
+  { title: "Overview", items: ["Dashboard"] },
+  {
+    title: "Workforce Management",
+    items: [
+      "Time & Attendance",
+      "Schedules",
+      "People",
+      "Performance",
+      "Tasks",
+      "EOD Report",
+      "Intraday Management",
+      "Workforce Forecasting",
+      "Service-Level Reporting",
+    ],
+  },
+  {
+    title: "Field Operations",
+    items: [
+      "GPS Live Field Map",
+      "Field Operations",
+      "Preventative Maintenance",
+      "Inventory",
+    ],
+  },
+  {
+    title: "Asset Management",
+    items: [
+      "Asset Management",
+      "Enterprise Asset Management",
+      "Software Asset Management",
+    ],
+  },
+  {
+    title: "Service & Support",
+    items: ["Service Hub", "HR Support", "Knowledge Base"],
+  },
+  {
+    title: "Automation & Command",
+    items: ["Automation Intelligence", "Advanced Platform", "Command Center"],
+  },
+  {
+    title: "Communications",
+    items: ["Dialer"],
+  },
+  {
+    title: "Billing & Platform Administration",
+    items: ["Billing", "Tenant Management", "Platform Billing"],
+  },
+];
+
 const statusOptions: AttendanceStatus[] = [
   "Working",
   "Break",
@@ -4864,74 +4915,79 @@ export default function Home() {
             Tap the star to pin a tab to the top bar.
           </div>
  
-          {allNavItems
-            .filter(
+          {navGroups.map((group) => {
+            const groupItems = allNavItems.filter(
               (item) =>
+                group.items.includes(item.name) &&
                 profile &&
-                canAccess(
-                  profile.role,
-                  item.name
-                )
-            )
-            .map(
-              (item) => {
-                const Icon =
-                  item.icon;
- 
-                const active =
-                  activeTab ===
-                  item.name;
- 
-                const isFavorite = favoriteTabs.includes(item.name);
- 
-                return (
-                  <div
-                    key={item.name}
-                    className={`group w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 ${
-                      active
-                        ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
-                        : "text-slate-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.name === "Dialer") {
-                          router.push("/dialer");
-                        } else {
-                          setActiveTab(item.name);
-                        }
-                        setLeftMenuOpen(false);
-                      }}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                    >
+                canAccess(profile.role, item.name)
+            );
+
+            if (groupItems.length === 0) return null;
+
+            return (
+              <section key={group.title} className="pt-2 first:pt-0">
+                <div className="px-3 pb-2 pt-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                  {group.title}
+                </div>
+                <div className="space-y-1">
+                  {groupItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = activeTab === item.name;
+                    const isFavorite = favoriteTabs.includes(item.name);
+
+                    return (
                       <div
-                        className={`h-9 w-9 rounded-lg flex items-center justify-center transition flex-shrink-0 ${
+                        key={item.name}
+                        className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
                           active
-                            ? "bg-white/20"
-                            : `${item.iconBg} group-hover:scale-105`
+                            ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
+                            : "text-slate-400 hover:bg-white/5 hover:text-white"
                         }`}
                       >
-                        <Icon size={19} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item.name === "Dialer") {
+                              router.push("/dialer");
+                            } else {
+                              setActiveTab(item.name);
+                            }
+                            setLeftMenuOpen(false);
+                          }}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                        >
+                          <div
+                            className={`h-9 w-9 rounded-lg flex items-center justify-center transition flex-shrink-0 ${
+                              active
+                                ? "bg-white/20"
+                                : `${item.iconBg} group-hover:scale-105`
+                            }`}
+                          >
+                            <Icon size={19} />
+                          </div>
+                          <span className="font-semibold text-sm truncate">{item.name}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleFavoriteTab(item.name)}
+                          className="flex-shrink-0 p-1"
+                          title={isFavorite ? "Remove from top bar" : "Pin to top bar"}
+                          aria-label={isFavorite ? `Unpin ${item.name}` : `Pin ${item.name}`}
+                        >
+                          <Star
+                            size={16}
+                            className={isFavorite ? "fill-amber-400 text-amber-400" : "text-slate-500"}
+                          />
+                        </button>
                       </div>
-                      <span className="font-semibold text-sm truncate">{item.name}</span>
-                    </button>
- 
-                    <button
-                      type="button"
-                      onClick={() => toggleFavoriteTab(item.name)}
-                      className="flex-shrink-0"
-                      title={isFavorite ? "Remove from top bar" : "Pin to top bar"}
-                    >
-                      <Star
-                        size={16}
-                        className={isFavorite ? "fill-amber-400 text-amber-400" : "text-slate-500"}
-                      />
-                    </button>
-                  </div>
-                );
-              }
-            )}
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </nav>
  
         {/* SIGN OUT */}
