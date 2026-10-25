@@ -63,15 +63,16 @@ export default function InternalOperationsPage() {
  function updateDraft(row:StaffAccess,patch:Partial<{role_key:string;department_name:string;allowed_tabs:string[]}>){setStaffDrafts(prev=>{const current=prev[row.user_id]||{role_key:row.role_key,department_name:row.department_name,allowed_tabs:row.allowed_tabs||[]};return {...prev,[row.user_id]:{...current,...patch}}})}
  async function saveStaffAccess(row:StaffAccess){
   if(!staffAccess?.can_manage_access){setMessage("You do not have permission to manage staff access.");return}
-  if(row.user_id===staffAccess.user_id){setMessage("For security, you cannot edit your own access from this screen.");return}
+  if(row.user_id===staffAccess.user_id||row.role_key==="business_admin"){setMessage("Administrator access is protected from this editor.");return}
   const draft=draftFor(row);
   if(!roleOptions.some(r=>r.value===draft.role_key)){setMessage("Choose a permitted staff role.");return}
   if(!draft.department_name){setMessage("Choose a department before saving.");return}
   if(!draft.allowed_tabs.length){setMessage("Select at least one permitted tab.");return}
   if(draft.allowed_tabs.some(tab=>!editableTabs.includes(tab))){setMessage("One or more selected tabs cannot be granted through this editor.");return}
   setSaving(true);setMessage("");
-  const {error}=await supabase.from("internal_staff_access").update({role_key:draft.role_key,department_name:draft.department_name,allowed_tabs:draft.allowed_tabs,can_manage_access:false,updated_at:new Date().toISOString()}).eq("user_id",row.user_id).eq("org_id",INTERNAL_ORG_ID);
+  const {data:updatedRows,error}=await supabase.from("internal_staff_access").update({role_key:draft.role_key,department_name:draft.department_name,allowed_tabs:draft.allowed_tabs,can_manage_access:false,updated_at:new Date().toISOString()}).eq("user_id",row.user_id).eq("org_id",INTERNAL_ORG_ID).select("user_id");
   if(error){setMessage("Could not save access: "+error.message);setSaving(false);return}
+  if(!updatedRows?.length){setMessage("No access record was updated. Check the administrator permission policy in Supabase.");setSaving(false);return}
   await load();setMessage("Access saved for "+row.user_id+".");setSaving(false);
  }
 
