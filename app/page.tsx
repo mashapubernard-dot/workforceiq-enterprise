@@ -6989,10 +6989,11 @@ export default function Home() {
                     window.alert("Please allow pop-ups for WorkforceIQ to export this report as a PDF.");
                     return;
                   }
+                  const htmlEscapes: Record<string, string> = {
+                    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+                  };
                   const escapeHtml = (value: unknown) =>
-                    String(value ?? "").replace(/[&<>"']/g, (character) => ({
-                      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-                    })[character] || character);
+                    String(value ?? "").replace(/[&<>"']/g, (character) => htmlEscapes[character] || character);
                   const reportRows = eodRecords.map((record) => {
                     const schedule = scheduledToday.find((item) => item.user_id === record.user_id);
                     const employeeName = names.get(record.user_id) ?? "Unknown employee";
