@@ -6808,6 +6808,16 @@ export default function Home() {
                   </div>
  
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={downloadEodPdf}
+                      disabled={loadingEod || eodRecords.length === 0}
+                      className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-bold text-violet-700 shadow-sm hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Export the selected day's report to PDF"
+                    >
+                      <Receipt size={16} />
+                      Download PDF
+                    </button>
                     <input
                       type="date"
                       value={
@@ -6973,6 +6983,86 @@ export default function Home() {
                     })
                   );
  
+                const downloadEodPdf = () => {
+                  const popup = window.open("", "_blank");
+                  if (!popup) {
+                    window.alert("Please allow pop-ups for WorkforceIQ to export this report as a PDF.");
+                    return;
+                  }
+                  const htmlEscapes: Record<string, string> = {
+                    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+                  };
+                  const escapeHtml = (value: unknown) =>
+                    String(value ?? "").replace(/[&<>"']/g, (character) => htmlEscapes[character] || character);
+                  const reportRows = eodRecords.map((record) => {
+                    const schedule = scheduledToday.find((item) => item.user_id === record.user_id);
+                    const employeeName = names.get(record.user_id) ?? "Unknown employee";
+                    const scheduledHours = schedule
+                      ? `${schedule.start_time.slice(0, 5)} – ${schedule.end_time.slice(0, 5)}`
+                      : "Not scheduled";
+                    const actualEnd = record.clock_out ? new Date(record.clock_out).getTime() : now;
+                    const duration = formatShortDuration(Math.max(0, actualEnd - new Date(record.clock_in).getTime()));
+                    const actualStart = formatClockTime(record.clock_in);
+                    const scheduledStart = schedule ? schedule.start_time.slice(0, 5) : null;
+                    const late = Boolean(scheduledStart && actualStart !== "—" && actualStart > scheduledStart);
+                    return `<tr>
+                      <td>${escapeHtml(employeeName)}</td>
+                      <td>${escapeHtml(scheduledHours)}</td>
+                      <td>${escapeHtml(actualStart)}</td>
+                      <td>${escapeHtml(formatClockTime(record.clock_out))}</td>
+                      <td>${escapeHtml(duration)}</td>
+                      <td>${escapeHtml(getStatusLabel(record.status))}</td>
+                      <td class="${late ? "exception" : ""}">${late ? "Late" : schedule ? "On time" : "No schedule"}</td>
+                    </tr>`;
+                  }).join("");
+                  const missingRows = scheduledToday
+                    .filter((schedule) => !uniqueWorkedIds.has(schedule.user_id))
+                    .map((schedule) => `<tr class="missing">
+                      <td>${escapeHtml(names.get(schedule.user_id) ?? "Unknown employee")}</td>
+                      <td>${escapeHtml(schedule.start_time.slice(0, 5) + " – " + schedule.end_time.slice(0, 5))}</td>
+                      <td colspan="4">No clock-in record</td><td class="exception">Absent / unconfirmed</td>
+                    </tr>`).join("");
+                  const html = `<!doctype html><html><head><meta charset="utf-8"><title>WorkforceIQ EOD Report - ${escapeHtml(eodDate)}</title>
+                    <style>
+                      @page { size: A4 landscape; margin: 14mm; }
+                      * { box-sizing: border-box; }
+                      body { font: 12px Arial, sans-serif; color: #172033; margin: 0; }
+                      header { border-bottom: 3px solid #dc2626; padding-bottom: 12px; margin-bottom: 18px; }
+                      h1 { font-size: 23px; margin: 0 0 5px; } .muted { color: #64748b; }
+                      .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; margin: 16px 0 22px; }
+                      .metric { border: 1px solid #dbe2ea; border-radius: 7px; padding: 10px; }
+                      .metric b { display: block; font-size: 18px; margin-top: 5px; }
+                      h2 { font-size: 15px; margin: 20px 0 8px; }
+                      table { width: 100%; border-collapse: collapse; font-size: 10px; }
+                      th { background: #f1f5f9; text-align: left; }
+                      th, td { border: 1px solid #dbe2ea; padding: 7px; }
+                      .exception { color: #b91c1c; font-weight: bold; }
+                      .missing { background: #fff7ed; }
+                      footer { margin-top: 20px; color: #64748b; font-size: 9px; }
+                      tr { break-inside: avoid; }
+                    </style></head><body>
+                    <header><h1>WorkforceIQ — End of Day Report</h1><div class="muted">Report date: ${escapeHtml(eodDate)} · Generated: ${escapeHtml(new Date().toLocaleString("en-ZA"))}</div></header>
+                    <section class="summary">
+                      <div class="metric">Employees clocked in<b>${worked}</b></div>
+                      <div class="metric">Scheduled<b>${scheduled}</b></div>
+                      <div class="metric">Schedule adherence<b>${adherence}%</b></div>
+                      <div class="metric">Attendance records<b>${eodRecords.length}</b></div>
+                      <div class="metric">Gross clock time<b>${escapeHtml(formatShortDuration(totalMs))}</b></div>
+                    </section>
+                    <h2>Employee attendance detail</h2>
+                    <table><thead><tr><th>Employee</th><th>Scheduled</th><th>Clock in</th><th>Clock out</th><th>Clock duration</th><th>Final status</th><th>Attendance</th></tr></thead>
+                    <tbody>${reportRows || '<tr><td colspan="7">No attendance records for this date.</td></tr>'}${missingRows}</tbody></table>
+                    <footer>Confidential workforce operations report · WorkforceIQ Enterprise</footer>
+                    </body></html>`;
+                  popup.document.open();
+                  popup.document.write(html);
+                  popup.document.close();
+                  popup.onload = () => {
+                    popup.focus();
+                    popup.print();
+                  };
+                };
+
                 return (
                   <>
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
