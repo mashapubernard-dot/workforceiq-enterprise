@@ -4685,6 +4685,8 @@ export default function Home() {
     );
   }
  
+  let downloadEodPdf: () => void = () => {};
+ 
   const activeNav =
     allNavItems.find(
       (item) =>
@@ -6983,7 +6985,7 @@ export default function Home() {
                     })
                   );
  
-                const downloadEodPdf = () => {
+                downloadEodPdf = () => {
                   const popup = window.open("", "_blank");
                   if (!popup) {
                     window.alert("Please allow pop-ups for WorkforceIQ to export this report as a PDF.");
