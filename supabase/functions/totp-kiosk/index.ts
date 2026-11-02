@@ -127,13 +127,23 @@ Deno.serve(async (req) => {
 
       if (action === "verify_enrollment") {
         const { data: row, error } = await admin.from("workforceiq_kiosk_totp")
-          .select("pending_encrypted_secret,pending_expires_at").eq("employee_id", employeeId).eq("org_id", actor.org_id).maybeSingle();
+          .select("pending_encrypted_secret,pending_expires_at,failed_attempts,locked_until").eq("employee_id", employeeId).eq("org_id", actor.org_id).maybeSingle();
         if (error || !row?.pending_encrypted_secret || !row.pending_expires_at || new Date(row.pending_expires_at).getTime() < Date.now()) {
           return json({ error: "Enrollment expired. Start enrollment again." }, 400);
         }
+        if (row.locked_until && new Date(row.locked_until).getTime() > Date.now()) {
+          return json({ error: "Too many incorrect codes. Wait five minutes or ask your administrator to restart setup." }, 429);
+        }
         const secret = await decryptSecret(row.pending_encrypted_secret);
         const step = await verifyTotp(secret, String(body.code || ""));
-        if (step === null) return json({ error: "Code not accepted. Check the current code and try again." }, 400);
+        if (step === null) {
+          const attempts = Number(row.failed_attempts || 0) + 1;
+          const update: Record<string, unknown> = { failed_attempts: attempts, updated_at: new Date().toISOString() };
+          if (attempts >= 5) { update.failed_attempts = 0; update.locked_until = new Date(Date.now() + 5 * 60_000).toISOString(); }
+          await admin.from("workforceiq_kiosk_totp").update(update).eq("employee_id", employeeId).eq("org_id", actor.org_id);
+          await admin.from("workforceiq_kiosk_audit").insert({ org_id: actor.org_id, employee_id: employeeId, actor_id: actorId, event_type: "ENROLLMENT_VERIFICATION_FAILED" });
+          return json({ error: attempts >= 5 ? "Too many incorrect codes. Wait five minutes or ask your administrator to restart setup." : "Code not accepted. Check the current six-digit code and try again." }, attempts >= 5 ? 429 : 400);
+        }
         const { error: saveError } = await admin.from("workforceiq_kiosk_totp").update({
           encrypted_secret: row.pending_encrypted_secret, pending_encrypted_secret: null,
           pending_expires_at: null, enrolled_at: new Date().toISOString(), last_used_step: step,
