@@ -202,6 +202,10 @@ grant execute on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,d
 
 
 
+-- Remove broad table grants so RLS cannot be bypassed with TRUNCATE or DELETE.
+revoke all on table public.user_profiles from public, anon, authenticated;
+grant select, insert, update on table public.user_profiles to authenticated;
+
 -- user_profiles previously allowed authenticated users to update their own role
 -- and tenant assignment, and had a permissive INSERT policy. Protect those
 -- authority fields because the TOTP service derives role/org from this table.
