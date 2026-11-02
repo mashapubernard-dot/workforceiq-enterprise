@@ -220,6 +220,18 @@ export default function RealVoipPanel() {
         .update({ status: "accepted", updated_at: new Date().toISOString() })
         .eq("id", call.id);
       if (updateError) throw updateError;
+      const statusChannel = supabase.channel("wfiq-callee-status-" + call.id)
+        .on("postgres_changes", {
+          event: "UPDATE", schema: "public", table: "webrtc_call_sessions",
+          filter: "id=eq." + call.id,
+        }, (payload: any) => {
+          const next = payload.new as CallRow;
+          if (next.status === "ended" || next.status === "missed" || next.status === "declined") {
+            cleanupMedia();
+            setStatus("The other person ended the call.");
+          }
+        }).subscribe();
+      callStatusChannelRef.current = statusChannel;
       setIncoming(null);
       setCallState("connecting");
       setStatus("Joining call…");
@@ -382,6 +394,15 @@ export default function RealVoipPanel() {
             if (call.status !== "ringing" || activeCallRef.current) return;
             const caller = (people ?? []).find((person: any) => person.id === call.caller_id);
             setIncoming({ call, callerName: caller?.full_name ?? "WorkforceIQ colleague" });
+          })
+          .on("postgres_changes", {
+            event: "UPDATE", schema: "public", table: "webrtc_call_sessions",
+            filter: "callee_id=eq." + auth.user.id,
+          }, (payload: any) => {
+            const changed = payload.new as CallRow;
+            if (changed.status !== "ringing") {
+              setIncoming((current) => current?.call.id === changed.id ? null : current);
+            }
           }).subscribe();
         inboxChannelRef.current = inbox;
 
