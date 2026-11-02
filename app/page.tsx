@@ -4535,14 +4535,15 @@ export default function Home() {
   return (
     <div className={`flex h-screen overflow-hidden ${tenantThemeClass}`}>
       <style jsx global>{`
-        /* === INTERNAL OPERATIONS: LEMON GROVE WEATHER === */
+        /* === INTERNAL OPERATIONS: PREMIUM LEMON GROVE === */
         .theme-internal-operations {
           isolation: isolate;
           position: relative;
           background:
-            radial-gradient(circle at 12% 12%, rgba(250, 220, 105, 0.22), transparent 30%),
-            radial-gradient(circle at 88% 22%, rgba(134, 200, 145, 0.18), transparent 34%),
-            linear-gradient(180deg, #f7fcf5 0%, #fffdf2 52%, #f1f8ed 100%);
+            radial-gradient(ellipse at 82% 8%, rgba(246, 221, 126, 0.17), transparent 27%),
+            radial-gradient(ellipse at 12% 82%, rgba(129, 184, 139, 0.13), transparent 34%),
+            linear-gradient(145deg, #f7faf5 0%, #f4f8f1 48%, #fbfaf2 100%);
+          color: #24352b;
         }
         .theme-internal-operations::before,
         .theme-internal-operations::after {
@@ -4552,40 +4553,109 @@ export default function Home() {
           pointer-events: none;
           z-index: -1;
         }
+        /* Gentle sunlight and soft botanical atmosphere */
         .theme-internal-operations::before {
           background:
-            radial-gradient(circle at 78% 13%, rgba(255, 218, 92, 0.24) 0, rgba(255, 218, 92, 0.10) 9%, transparent 23%),
-            radial-gradient(ellipse at 15% 25%, rgba(255, 255, 255, 0.68), transparent 34%),
-            radial-gradient(ellipse at 88% 76%, rgba(178, 220, 174, 0.20), transparent 35%);
-          animation: internalSunGlow 18s ease-in-out infinite alternate;
+            radial-gradient(circle at 78% 13%, rgba(255, 224, 132, 0.24), transparent 22%),
+            radial-gradient(ellipse at 18% 22%, rgba(255,255,255,0.65), transparent 32%),
+            radial-gradient(ellipse at 86% 78%, rgba(155, 199, 154, 0.14), transparent 34%);
+          animation: internalGroveGlow 24s ease-in-out infinite alternate;
         }
+        /* Slow cloud drift with a very faint passing-rain texture */
         .theme-internal-operations::after {
-          opacity: 0.30;
+          opacity: 0.19;
           background-image:
-            radial-gradient(ellipse 90px 28px at 18% 20%, rgba(255,255,255,0.78) 0 55%, transparent 72%),
-            radial-gradient(ellipse 110px 34px at 22% 19%, rgba(255,255,255,0.68) 0 55%, transparent 72%),
-            radial-gradient(ellipse 120px 36px at 78% 32%, rgba(255,255,255,0.65) 0 55%, transparent 72%),
-            radial-gradient(ellipse 90px 28px at 82% 31%, rgba(255,255,255,0.72) 0 55%, transparent 72%),
-            repeating-linear-gradient(112deg, transparent 0 34px, rgba(111, 170, 190, 0.10) 35px 36px, transparent 37px 68px);
-          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 180px;
-          animation: internalCloudDrift 52s linear infinite, internalRainDrift 9s linear infinite;
+            radial-gradient(ellipse 115px 34px at 17% 19%, rgba(255,255,255,0.9) 0 55%, transparent 73%),
+            radial-gradient(ellipse 145px 42px at 23% 18%, rgba(255,255,255,0.78) 0 55%, transparent 73%),
+            radial-gradient(ellipse 125px 38px at 78% 34%, rgba(255,255,255,0.8) 0 55%, transparent 73%),
+            repeating-linear-gradient(112deg, transparent 0 48px, rgba(103, 155, 168, 0.07) 49px 50px, transparent 51px 92px);
+          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 210px;
+          animation: internalGroveClouds 64s linear infinite;
         }
-        @keyframes internalSunGlow {
-          from { opacity: 0.62; transform: scale(1); }
-          to { opacity: 1; transform: scale(1.035); }
+        @keyframes internalGroveGlow {
+          from { opacity: 0.58; transform: scale(1); }
+          to { opacity: 0.92; transform: scale(1.025); }
         }
-        @keyframes internalCloudDrift {
-          from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
-          to { background-position: 70px 0, 70px 0, -90px 0, -90px 0, 0 0; }
+        @keyframes internalGroveClouds {
+          from { background-position: 0 0, 0 0, 0 0, 0 -210px; }
+          to { background-position: 85px 0, 85px 0, -105px 0, 0 0; }
         }
-        @keyframes internalRainDrift {
-          from { background-position: 0 0, 0 0, 0 0, 0 0, 0 -180px; }
-          to { background-position: 70px 0, 70px 0, -90px 0, -90px 0, 0 0; }
+
+        /* Deep evergreen navigation: premium enterprise contrast */
+        .theme-internal-operations aside {
+          background: linear-gradient(180deg, #183b2b 0%, #204b35 54%, #173728 100%) !important;
+          border-right: 1px solid rgba(222, 239, 211, 0.14);
+          box-shadow: 8px 0 28px rgba(25, 59, 42, 0.10);
+        }
+        .theme-internal-operations aside .text-red-500,
+        .theme-internal-operations aside .text-red-400 {
+          color: #f3d96b !important;
+        }
+        .theme-internal-operations aside .bg-red-600,
+        .theme-internal-operations aside .bg-red-700 {
+          background-color: #78a95b !important;
+        }
+        .theme-internal-operations aside .bg-gradient-to-br {
+          background-image: linear-gradient(135deg, #83b96a, #e3c85a) !important;
+        }
+        .theme-internal-operations aside .text-slate-400,
+        .theme-internal-operations aside .text-slate-500 {
+          color: #c2d5c5 !important;
+        }
+        .theme-internal-operations aside .hover\\:bg-white\\/5:hover {
+          background-color: rgba(255,255,255,0.09) !important;
+        }
+
+        /* Refined translucent header and readable content surfaces */
+        .theme-internal-operations header {
+          background: rgba(250, 253, 247, 0.91) !important;
+          border-bottom-color: #dce8d8 !important;
+          backdrop-filter: blur(16px);
+          box-shadow: 0 3px 18px rgba(36, 73, 48, 0.045);
+        }
+        .theme-internal-operations ::selection { background: #e9d878; color: #203a2a; }
+        .theme-internal-operations .bg-white,
+        .theme-internal-operations .bg-white\\/90 {
+          background-color: rgba(255, 255, 252, 0.94) !important;
+        }
+        .theme-internal-operations .border-slate-200 {
+          border-color: #dce8d9 !important;
+        }
+        .theme-internal-operations .rounded-2xl.border-slate-200,
+        .theme-internal-operations .rounded-2xl.bg-white {
+          box-shadow: 0 5px 22px rgba(39, 76, 49, 0.055), 0 1px 2px rgba(39, 76, 49, 0.035) !important;
+        }
+        .theme-internal-operations .text-slate-900 { color: #213b2c !important; }
+        .theme-internal-operations .text-slate-800 { color: #294633 !important; }
+        .theme-internal-operations .text-slate-700 { color: #3d5c43 !important; }
+        .theme-internal-operations .text-slate-600,
+        .theme-internal-operations .text-slate-500 { color: #6c806d !important; }
+        .theme-internal-operations .divide-slate-100 > * + * { border-color: #edf2e9 !important; }
+
+        /* Green/yellow accents for primary actions, without changing status colours */
+        .theme-internal-operations main button[class*="bg-gradient-to"],
+        .theme-internal-operations main button.bg-red-600 {
+          transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+        }
+        .theme-internal-operations main button[class*="bg-gradient-to"]:hover {
+          filter: saturate(1.08) brightness(1.025);
+          box-shadow: 0 5px 16px rgba(64, 112, 66, 0.16);
+        }
+        .theme-internal-operations main button:focus-visible,
+        .theme-internal-operations aside button:focus-visible {
+          outline: 2px solid #d6bd4d;
+          outline-offset: 3px;
         }
         @media (prefers-reduced-motion: reduce) {
           .theme-internal-operations::before,
           .theme-internal-operations::after {
             animation: none !important;
+          }
+          .theme-internal-operations *,
+          .theme-internal-operations *::before,
+          .theme-internal-operations *::after {
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
           }
         }
 
