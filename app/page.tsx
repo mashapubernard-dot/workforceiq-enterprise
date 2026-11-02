@@ -686,7 +686,7 @@ function getStatusClasses(status: AttendanceStatus) {
 function canAccess(role: Role, section: string, blockedByRole: Record<string, string[]> = {}) {
   const item = allNavItems.find((navItem) => navItem.name === section);
   if (!item) return false;
-  if (role === "Super Admin" || role === "Platform Super Admin") return item.roles.includes(role);
+  if (role === "Super Admin" || role === "Platform Super Admin") return true;
   if (role === "Administrator") return !["Tenant Management", "Platform Billing", "Role & Permissions", "Authentication Management"].includes(section);
   if (["Tenant Management", "Platform Billing"].includes(section)) return false;
   if (["Role & Permissions", "Authentication Management"].includes(section)) return false;
