@@ -162,6 +162,36 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "self_clock") {
+      const employeeId = actorId;
+      const { data: row, error } = await admin.from("workforceiq_kiosk_totp")
+        .select("encrypted_secret,failed_attempts,locked_until").eq("employee_id", employeeId)
+        .eq("org_id", actor.org_id).not("enrolled_at", "is", null).maybeSingle();
+      if (error || !row?.encrypted_secret) return json({ error: "Authenticator enrollment is required." }, 403);
+      if (row.locked_until && new Date(row.locked_until).getTime() > Date.now()) return json({ error: "Too many attempts. Wait five minutes." }, 429);
+      const step = await verifyTotp(await decryptSecret(row.encrypted_secret), String(body.code || ""));
+      if (step === null) {
+        const attempts = Number(row.failed_attempts || 0) + 1;
+        await admin.from("workforceiq_kiosk_totp").update({
+          failed_attempts: attempts >= 5 ? 0 : attempts,
+          locked_until: attempts >= 5 ? new Date(Date.now() + 300000).toISOString() : null,
+        }).eq("employee_id", employeeId).eq("org_id", actor.org_id);
+        return json({ error: "Code not accepted." }, 401);
+      }
+      const { data: consumed, error: consumeError } = await admin.rpc("workforceiq_consume_kiosk_totp_step", {
+        p_employee_id: employeeId, p_org_id: actor.org_id, p_step: step,
+      });
+      if (consumeError || consumed !== true) return json({ error: "Code already used. Wait for the next code." }, 409);
+      const { data: punch, error: punchError } = await admin.rpc("workforceiq_kiosk_record_self_punch", {
+        p_employee_id: employeeId, p_org_id: actor.org_id,
+        p_latitude: body.latitude ?? null, p_longitude: body.longitude ?? null,
+        p_accuracy_m: body.accuracy_m ?? null, p_site_id: null, p_distance_m: null,
+        p_geofence_status: null,
+      });
+      if (punchError) throw punchError;
+      return json(punch);
+    }
+
     if (action === "kiosk_list") {
       if (!isAdmin) return json({ error: "Company kiosk administrator sign-in required" }, 403);
       const { data: enrolled, error } = await admin.from("workforceiq_kiosk_totp")
