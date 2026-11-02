@@ -268,7 +268,7 @@ const allNavItems = [
     iconBg: "bg-emerald-100 text-emerald-600",
   },
   {
-    name: "Biometric Management",
+    name: "Authenticator Management",
     icon: Fingerprint,
     roles: ["Administrator"] as Role[],
     color: "from-red-600 to-rose-700",
@@ -556,7 +556,7 @@ const navGroups = [
     title: "Workforce Management",
     items: [
       "Time & Attendance",
-      "Biometric Management",
+      "Authenticator Management",
       "Schedules",
       "People",
       "Performance",
@@ -5254,7 +5254,7 @@ export default function Home() {
           )}
 
           {/* BIOMETRIC MANAGEMENT */}
-          {activeTab === "Biometric Management" && profile?.role === "Administrator" && (
+          {activeTab === "Authenticator Management" && profile?.role === "Administrator" && (
             <BiometricManagementPanel employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))} />
           )}
 
