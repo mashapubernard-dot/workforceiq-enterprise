@@ -47,6 +47,7 @@ import {
   Star,
   Receipt,
   Building2,
+  Fingerprint,
 } from "lucide-react";
 import { supabase } from "../supabase/client";
 import OperationsControlPanel from "./OperationsControlPanel";
@@ -64,6 +65,7 @@ import PreventativeMaintenancePanel from "./PreventativeMaintenancePanel";
 import WorkforceForecastingPanel from "./WorkforceForecastingPanel";
 import SoftwareAssetManagementPanel from "./SoftwareAssetManagementPanel";
 import EnterpriseAssetManagementPanel from "./EnterpriseAssetManagementPanel";
+import BiometricManagementPanel from "./BiometricManagementPanel";
  
 type Role =
   | "Administrator"
@@ -264,6 +266,14 @@ const allNavItems = [
     color: "from-emerald-500 to-teal-600",
     light: "bg-emerald-50 text-emerald-700 border-emerald-200",
     iconBg: "bg-emerald-100 text-emerald-600",
+  },
+  {
+    name: "Biometric Management",
+    icon: Fingerprint,
+    roles: ["Administrator"] as Role[],
+    color: "from-red-600 to-rose-700",
+    light: "bg-red-50 text-red-700 border-red-200",
+    iconBg: "bg-red-100 text-red-600",
   },
   {
     name: "GPS Live Field Map",
@@ -546,6 +556,7 @@ const navGroups = [
     title: "Workforce Management",
     items: [
       "Time & Attendance",
+      "Biometric Management",
       "Schedules",
       "People",
       "Performance",
@@ -5240,6 +5251,11 @@ export default function Home() {
           {/* GPS LIVE FIELD MAP */}
           {activeTab === "GPS Live Field Map" && profile && (
             <GPSLiveFieldMap />
+          )}
+
+          {/* BIOMETRIC MANAGEMENT */}
+          {activeTab === "Biometric Management" && profile?.role === "Administrator" && (
+            <BiometricManagementPanel employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))} />
           )}
 
           {/* DASHBOARD */}
