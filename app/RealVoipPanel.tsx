@@ -359,23 +359,24 @@ export default function RealVoipPanel() {
     let cancelled = false;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
     let presenceRefresh: ReturnType<typeof setInterval> | null = null;
+    let initializedUserId = "";
 
-    async function initialize() {
+    async function initialize(authUser: { id: string }) {
+      if (cancelled || initializedUserId === authUser.id) return;
+      initializedUserId = authUser.id;
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        if (!auth.user) throw new Error("Please sign in to use WorkforceIQ calling.");
         const { data: profile, error: profileError } = await supabase
-          .from("user_profiles").select("id, full_name, org_id").eq("id", auth.user.id).maybeSingle();
+          .from("user_profiles").select("id, full_name, org_id").eq("id", authUser.id).maybeSingle();
         if (profileError) throw profileError;
         if (!profile?.org_id) throw new Error("Your user profile is not linked to a company.");
         if (cancelled) return;
-        userIdRef.current = auth.user.id;
-        setUserId(auth.user.id);
+        userIdRef.current = authUser.id;
+        setUserId(authUser.id);
         setOrgId(profile.org_id);
 
         const { data: people, error: peopleError } = await supabase
           .from("user_profiles").select("id, full_name, role")
-          .eq("org_id", profile.org_id).neq("id", auth.user.id).order("full_name");
+          .eq("org_id", profile.org_id).neq("id", authUser.id).order("full_name");
         if (peopleError) throw peopleError;
         if (cancelled) return;
         setDirectory((people ?? []) as DirectoryUser[]);
@@ -389,10 +390,10 @@ export default function RealVoipPanel() {
         };
         updateOnline(presence ?? []);
 
-        const inbox = supabase.channel("wfiq-incoming-" + auth.user.id)
+        const inbox = supabase.channel("wfiq-incoming-" + authUser.id)
           .on("postgres_changes", {
             event: "INSERT", schema: "public", table: "webrtc_call_sessions",
-            filter: "callee_id=eq." + auth.user.id,
+            filter: "callee_id=eq." + authUser.id,
           }, (payload: any) => {
             const call = payload.new as CallRow;
             if (call.status !== "ringing" || activeCallRef.current) return;
@@ -401,7 +402,7 @@ export default function RealVoipPanel() {
           })
           .on("postgres_changes", {
             event: "UPDATE", schema: "public", table: "webrtc_call_sessions",
-            filter: "callee_id=eq." + auth.user.id,
+            filter: "callee_id=eq." + authUser.id,
           }, (payload: any) => {
             const changed = payload.new as CallRow;
             if (changed.status !== "ringing") {
@@ -423,7 +424,7 @@ export default function RealVoipPanel() {
 
         const publishPresence = async () => {
           await supabase.from("webrtc_user_presence").upsert({
-            user_id: auth.user!.id, org_id: profile.org_id, last_seen: new Date().toISOString(),
+            user_id: authUser.id, org_id: profile.org_id, last_seen: new Date().toISOString(),
           }, { onConflict: "user_id" });
         };
         await publishPresence();
@@ -435,8 +436,10 @@ export default function RealVoipPanel() {
         }, 30000);
 
         setStatus("Ready • company-only calling");
+        setError("");
         setLoading(false);
       } catch (err) {
+        initializedUserId = "";
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not initialize WorkforceIQ calling.");
           setStatus("Calling unavailable");
@@ -444,9 +447,33 @@ export default function RealVoipPanel() {
         }
       }
     }
-    void initialize();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setLoading(true);
+        void initialize({ id: session.user.id });
+      } else {
+        initializedUserId = "";
+        userIdRef.current = "";
+        setUserId("");
+        setOrgId("");
+        setDirectory([]);
+        setOnlineIds(new Set());
+        setLoading(false);
+        setError("Please sign in to use WorkforceIQ calling.");
+        setStatus("Calling unavailable");
+      }
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) void initialize({ id: data.session.user.id });
+      else if (!cancelled) {
+        setLoading(false);
+        setError("Please sign in to use WorkforceIQ calling.");
+        setStatus("Calling unavailable");
+      }
+    });
     return () => {
       cancelled = true;
+      authListener.subscription.unsubscribe();
       if (heartbeat) clearInterval(heartbeat);
       if (presenceRefresh) clearInterval(presenceRefresh);
       cleanupMedia();
