@@ -83,15 +83,13 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $self_punch$
 declare
   open_row public.attendance%rowtype;
   employee_name text;
   punch_time timestamptz := now();
   site_row public.workforce_sites%rowtype;
   distance_m double precision;
-  nearest_distance double precision;
-  nearest_name text;
   has_sites boolean;
 begin
   perform pg_advisory_xact_lock(hashtext(p_employee_id::text));
@@ -143,6 +141,7 @@ begin
       where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
         and s.latitude between -90 and 90
         and s.longitude between -180 and 180
+        and (s.radius_m is null or (s.radius_m > 0 and s.radius_m < 'Infinity'::double precision))
     ) ranked
     order by ranked.calculated_distance asc
     limit 1;
@@ -156,7 +155,7 @@ begin
         org_id,user_id,site_id,latitude,longitude,accuracy_m,distance_m,radius_m,result,reason
       ) values (
         p_org_id,p_employee_id,site_row.id,p_latitude,p_longitude,p_accuracy_m,
-        distance_m,site_row.radius_m,'OUTSIDE',
+        distance_m,coalesce(site_row.radius_m, 100),'OUTSIDE',
         'Clock-in blocked outside the configured geofence.'
       );
       return jsonb_build_object(
@@ -192,7 +191,7 @@ begin
 
   return jsonb_build_object('employee_name', employee_name, 'action', 'CLOCK_IN', 'event_time', punch_time);
 end;
-$$;
+$self_punch$;
 
 revoke all on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) from public, anon, authenticated;
 grant execute on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) to service_role;
