@@ -40,7 +40,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $
+as $function$
 declare
   is_locked boolean;
 begin
@@ -58,7 +58,7 @@ begin
   end if;
   return coalesce(is_locked, false);
 end;
-$;
+$function$;
 
 revoke all on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) from public, anon, authenticated;
 grant execute on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) to service_role;
