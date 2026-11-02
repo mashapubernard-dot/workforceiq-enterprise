@@ -81,6 +81,10 @@ type Role =
   | "Super Admin"
   | "Platform Super Admin";
  
+function isIndividualContributorRole(role: Role | null | undefined) {
+  return role === "Employee" || role === "Technical Associate" || role === "IT";
+}
+
 type AttendanceStatus =
   | "Working"
   | "Break"
@@ -622,7 +626,7 @@ const navGroups = [
   },
 ];
 
-const permissionTabNames = allNavItems.map((item) => item.name).filter((name) => !["Tenant Management", "Platform Billing", "Role & Permissions"].includes(name));
+const permissionTabNames = allNavItems.map((item) => item.name).filter((name) => !["Tenant Management", "Platform Billing", "Role & Permissions", "Authenticator Management"].includes(name));
 
 const statusOptions: AttendanceStatus[] = [
   "Working",
@@ -686,6 +690,8 @@ function canAccess(role: Role, section: string, blockedByRole: Record<string, st
   if (!item) return false;
   if (role === "Super Admin" || role === "Platform Super Admin") return item.roles.includes(role);
   if (role === "Administrator") return section !== "Tenant Management" && section !== "Platform Billing";
+  if (["Tenant Management", "Platform Billing"].includes(section)) return false;
+  if (["Role & Permissions", "Authenticator Management"].includes(section)) return false;
   if (Object.prototype.hasOwnProperty.call(blockedByRole, role)) {
     return !(blockedByRole[role] ?? []).includes(section);
   }
@@ -743,7 +749,7 @@ function EmployeeCommentSection({
   // else (Administrator / Supervisor / Team Leader) sees all notes left
   // on the tab so it still functions as a shared, editable log.
   const visible =
-    profile?.role === "Employee"
+    isIndividualContributorRole(profile?.role)
       ? allForTab.filter((c) => c.author === profile.full_name)
       : allForTab;
  
@@ -773,7 +779,7 @@ function EmployeeCommentSection({
     <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-base font-black text-slate-800">
-          {profile?.role === "Employee" ? "My notes" : "Notes"} — {tabName}
+          {isIndividualContributorRole(profile?.role) ? "My notes" : "Notes"} — {tabName}
         </h3>
         <span className="text-xs font-semibold text-slate-400">
           {visible.length} {visible.length === 1 ? "note" : "notes"}
@@ -1605,24 +1611,23 @@ export default function Home() {
   });
  
   const canCreateSchedule =
-    profile?.role ===
-    "Administrator";
+    profile?.role === "Administrator" || profile?.role === "HR";
  
   const canEditSchedule =
-    profile?.role ===
-      "Administrator" ||
-    profile?.role ===
-      "Supervisor";
+    profile?.role === "Administrator" ||
+    profile?.role === "Supervisor" ||
+    profile?.role === "HR";
  
   const canDeleteSchedule =
     profile?.role ===
     "Administrator";
  
   const canViewAllSchedules =
-    profile?.role ===
-      "Administrator" ||
-    profile?.role ===
-      "Supervisor";
+    profile?.role === "Administrator" ||
+    profile?.role === "Supervisor" ||
+    profile?.role === "HR" ||
+    profile?.role === "Real-Time Analyst" ||
+    profile?.role === "Team Leader";
  
   // Shared derived state for the upper navigation tabs.
   // These values are calculated from existing attendance/schedule state only.
@@ -2218,8 +2223,7 @@ export default function Home() {
       async (date: string) => {
         if (
           !profile ||
-          profile.role ===
-            "Employee"
+          isIndividualContributorRole(profile.role)
         ) {
           return;
         }
@@ -2320,8 +2324,7 @@ export default function Home() {
   useEffect(() => {
     if (
       !profile ||
-      profile.role ===
-        "Employee"
+      isIndividualContributorRole(profile.role)
     ) {
       return;
     }
@@ -4356,7 +4359,7 @@ export default function Home() {
           ticket_type: "HR",
           requester: employeeName,
           employee_id: hrForm.employeeId,
-          assignee: profile?.role === "Employee" ? null : (profile?.full_name ?? null),
+          assignee: isIndividualContributorRole(profile?.role) ? null : (profile?.full_name ?? null),
           branch: null,
           sla_minutes: 120,
           component: hrForm.category,
@@ -4384,7 +4387,7 @@ export default function Home() {
         category: hrForm.category,
         status: "New",
         priority: hrForm.priority,
-        owner: profile?.role === "Employee" ? "HR Support" : (profile?.full_name ?? "HR Support"),
+        owner: isIndividualContributorRole(profile?.role) ? "HR Support" : (profile?.full_name ?? "HR Support"),
         createdAt: createdTicket.createdAt,
         dueDate: hrForm.dueDate,
         notes: cleanNotes,
@@ -10120,7 +10123,7 @@ export default function Home() {
                       <h3 className="text-3xl font-black mt-1">Knowledge Base</h3>
                     </div>
                   </div>
-                  {profile?.role !== "Employee" && (
+                  {!isIndividualContributorRole(profile?.role) && (
                     <button
                       type="button"
                       onClick={() => setShowKbForm((v) => !v)}
@@ -10161,7 +10164,7 @@ export default function Home() {
                 </select>
               </div>
  
-              {showKbForm && profile?.role !== "Employee" && (
+              {showKbForm && !isIndividualContributorRole(profile?.role) && (
                 <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-3">
                   <h3 className="font-black text-lg">Publish a new article</h3>
                   <input
@@ -10271,7 +10274,7 @@ export default function Home() {
                               {new Date(selected.updated_at).toLocaleDateString()}
                             </div>
                           </div>
-                          {profile?.role !== "Employee" && (
+                          {!isIndividualContributorRole(profile?.role) && (
                             <button
                               type="button"
                               onClick={() => void deleteKbArticle(selected.id)}
