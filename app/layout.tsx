@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./global.css";
 import PresenceHeartbeat from "./PresenceHeartbeat";
-import PresenceHeartbeat from "./PresenceHeartbeat";
 
 export const metadata: Metadata = {
   title: {
