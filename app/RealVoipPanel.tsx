@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Phone, PhoneOff, Mic, MicOff, Wifi, AlertCircle, CheckCircle2,
-  Loader2, UserRound, PhoneIncoming,
+  Loader2, UserRound, PhoneIncoming, Volume2, VolumeX,
 } from "lucide-react";
 import { supabase } from "../supabase/client";
 
@@ -44,6 +44,7 @@ export default function RealVoipPanel() {
   const [status, setStatus] = useState("Connecting to WorkforceIQ…");
   const [error, setError] = useState("");
   const [directorySearch, setDirectorySearch] = useState("");
+  const [ringtoneEnabled, setRingtoneEnabled] = useState(false);
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -57,6 +58,60 @@ export default function RealVoipPanel() {
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const processedSignalsRef = useRef<Set<number>>(new Set());
   const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ringtoneContextRef = useRef<AudioContext | null>(null);
+  const ringtoneIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopRingtone = useCallback(() => {
+    if (ringtoneIntervalRef.current) clearInterval(ringtoneIntervalRef.current);
+    ringtoneIntervalRef.current = null;
+  }, []);
+
+  const playRingtoneBurst = useCallback(() => {
+    const context = ringtoneContextRef.current;
+    if (!context || context.state !== "running") return;
+    const now = context.currentTime;
+    [0, 0.42].forEach((offset) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, now + offset);
+      gain.gain.setValueAtTime(0.0001, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.025);
+      gain.gain.setValueAtTime(0.18, now + offset + 0.24);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.28);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now + offset);
+      oscillator.stop(now + offset + 0.3);
+    });
+  }, []);
+
+  const enableRingtone = useCallback(async () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) throw new Error("This browser does not support ringtone audio.");
+      if (!ringtoneContextRef.current) ringtoneContextRef.current = new AudioContextClass();
+      await ringtoneContextRef.current.resume();
+      setRingtoneEnabled(ringtoneContextRef.current.state === "running");
+      if (incoming && ringtoneContextRef.current.state === "running") {
+        playRingtoneBurst();
+        stopRingtone();
+        ringtoneIntervalRef.current = setInterval(playRingtoneBurst, 1800);
+      }
+    } catch {
+      setError("Please allow sound for WorkforceIQ in your browser settings.");
+    }
+  }, [incoming, playRingtoneBurst, stopRingtone]);
+
+  useEffect(() => {
+    if (!incoming) { stopRingtone(); return; }
+    const context = ringtoneContextRef.current;
+    if (context?.state === "running") {
+      playRingtoneBurst();
+      ringtoneIntervalRef.current = setInterval(playRingtoneBurst, 1800);
+    }
+    return stopRingtone;
+  }, [incoming?.call.id, incoming, playRingtoneBurst, stopRingtone]);
 
   const setCall = (call: ActiveCall | null) => {
     activeCallRef.current = call;
@@ -66,6 +121,7 @@ export default function RealVoipPanel() {
   const cleanupMedia = useCallback(() => {
     if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
     ringTimeoutRef.current = null;
+    stopRingtone();
     peerConnectionRef.current?.close();
     peerConnectionRef.current = null;
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -85,7 +141,7 @@ export default function RealVoipPanel() {
     setCall(null);
     setCallState("idle");
     setBusy(false);
-  }, []);
+  }, [stopRingtone]);
 
   const insertSignal = useCallback(async (
     callId: string,
@@ -251,11 +307,12 @@ export default function RealVoipPanel() {
 
   const declineCall = useCallback(async () => {
     if (!incoming) return;
+    stopRingtone();
     await supabase.from("webrtc_call_sessions")
       .update({ status: "declined", updated_at: new Date().toISOString(), ended_at: new Date().toISOString() })
       .eq("id", incoming.call.id);
     setIncoming(null);
-  }, [incoming]);
+  }, [incoming, stopRingtone]);
 
   const startCall = useCallback(async (person: DirectoryUser) => {
     if (busy || callState !== "idle" || incoming) return;
@@ -493,7 +550,7 @@ export default function RealVoipPanel() {
             <div className="min-w-0 flex-1"><div className="font-black text-slate-900">Incoming WorkforceIQ call</div><div className="truncate text-sm text-slate-600">{incoming.callerName} is calling you</div></div>
           </div>
           {error && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">{error}</p>}
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 flex justify-end"><button type="button" onClick={() => void enableRingtone()} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"><VolumeX size={14}/> Enable ringing sound</button></div>\n          <div className="mt-4 flex gap-2">
             <button type="button" disabled={busy} onClick={() => void declineCall()} className="flex-1 rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">Decline</button>
             <button type="button" disabled={busy} onClick={() => void acceptCall()} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-50">{busy ? "Connecting…" : "Answer call"}</button>
           </div>
@@ -516,7 +573,7 @@ export default function RealVoipPanel() {
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[.16em] text-red-200"><Wifi size={13} /> WorkforceIQ Connect</div>
-            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Company dialer</h2>
+            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Company dialer</h2>\n            <button type="button" onClick={() => void enableRingtone()} className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20"><Volume2 size={15}/>{ringtoneEnabled ? "Ringtone enabled" : "Enable incoming-call sound"}</button>
             <p className="mt-1 max-w-md text-sm text-slate-300">Make secure voice calls to colleagues in your organisation.</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
