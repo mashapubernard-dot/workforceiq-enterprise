@@ -5255,7 +5255,7 @@ export default function Home() {
 
           {activeTab === "Role & Permissions" && (profile?.role === "Super Admin" || profile?.role === "Platform Super Admin") && (
             <RolePermissionsPanel
-              orgId={profile.orgId}
+              organizations={organizations.map((org) => ({ id: org.id, name: org.name }))}
               tabNames={permissionTabNames}
               onSaved={setRoleTabOverrides}
             />
