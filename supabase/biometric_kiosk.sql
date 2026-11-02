@@ -201,6 +201,56 @@ revoke all on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,doub
 grant execute on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) to service_role;
 
 
+
+-- user_profiles previously allowed authenticated users to update their own role
+-- and tenant assignment, and had a permissive INSERT policy. Protect those
+-- authority fields because the TOTP service derives role/org from this table.
+drop policy if exists "Enable insert for authenticated" on public.user_profiles;
+drop policy if exists "Super Admins can insert profiles" on public.user_profiles;
+create policy "Super Admins can insert profiles"
+on public.user_profiles
+for insert
+to authenticated
+with check (public.is_super_admin());
+
+create or replace function public.workforceiq_protect_user_profile_security_fields()
+returns trigger
+language plpgsql
+set search_path = public
+as $profile_guard$
+begin
+  if auth.uid() is not null and not public.is_super_admin() then
+    if tg_op = 'INSERT' then
+      if new.id is distinct from auth.uid()
+         or new.role <> 'Employee'
+         or new.org_id is not null
+         or new.organization_id is not null
+         or new.tenant_id is not null
+         or new.force_logout_at is not null then
+        raise exception 'New user profiles must start as unassigned employees. A Super Admin must assign roles and tenants.';
+      end if;
+    elsif tg_op = 'UPDATE' and auth.uid() = old.id then
+      if new.role is distinct from old.role
+         or new.org_id is distinct from old.org_id
+         or new.organization_id is distinct from old.organization_id
+         or new.tenant_id is distinct from old.tenant_id
+         or new.force_logout_at is distinct from old.force_logout_at then
+        raise exception 'You cannot change your own role, tenant assignment, or session controls.';
+      end if;
+    end if;
+  end if;
+
+  return new;
+end;
+$profile_guard$;
+
+drop trigger if exists workforceiq_protect_user_profile_security_fields on public.user_profiles;
+create trigger workforceiq_protect_user_profile_security_fields
+before insert or update on public.user_profiles
+for each row execute function public.workforceiq_protect_user_profile_security_fields();
+
+revoke all on function public.workforceiq_protect_user_profile_security_fields() from public, anon, authenticated;
+
 -- Remove broad browser privileges (including DELETE/TRUNCATE) from attendance.
 -- Authenticated users retain read access and may update only status fields.
 revoke all on table public.attendance from public, anon, authenticated;
