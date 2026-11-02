@@ -377,11 +377,11 @@ export default function RealVoipPanel() {
         setDirectory((people ?? []) as DirectoryUser[]);
 
         const { data: presence, error: presenceError } = await supabase
-          .from("webrtc_user_presence").select("user_id, last_seen").eq("org_id", profile.org_id);
+          .from("webrtc_user_presence").select("user_id, last_seen, is_clocked_in").eq("org_id", profile.org_id);
         if (presenceError) throw presenceError;
-        const updateOnline = (rows: { user_id: string; last_seen: string }[]) => {
-          const cutoff = Date.now() - 65000;
-          setOnlineIds(new Set(rows.filter((row) => new Date(row.last_seen).getTime() > cutoff).map((row) => row.user_id)));
+        const updateOnline = (rows: { user_id: string; last_seen: string; is_clocked_in?: boolean }[]) => {
+          const cutoff = Date.now() - 90000;
+          setOnlineIds(new Set(rows.filter((row) => row.is_clocked_in || new Date(row.last_seen).getTime() > cutoff).map((row) => row.user_id)));
         };
         updateOnline(presence ?? []);
 
@@ -412,7 +412,7 @@ export default function RealVoipPanel() {
             filter: "org_id=eq." + profile.org_id,
           }, async () => {
             const { data: rows } = await supabase.from("webrtc_user_presence")
-              .select("user_id, last_seen").eq("org_id", profile.org_id);
+              .select("user_id, last_seen, is_clocked_in").eq("org_id", profile.org_id);
             updateOnline(rows ?? []);
           }).subscribe();
         presenceChannelRef.current = presenceChannel;
@@ -426,7 +426,7 @@ export default function RealVoipPanel() {
         heartbeat = setInterval(() => { void publishPresence(); }, 25000);
         presenceRefresh = setInterval(async () => {
           const { data: rows } = await supabase.from("webrtc_user_presence")
-            .select("user_id, last_seen").eq("org_id", profile.org_id);
+            .select("user_id, last_seen, is_clocked_in").eq("org_id", profile.org_id);
           updateOnline(rows ?? []);
         }, 30000);
 
