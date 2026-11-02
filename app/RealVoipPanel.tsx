@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Phone, PhoneOff, Mic, MicOff, Wifi, AlertCircle, CheckCircle2,
-  Loader2, UserRound, PhoneIncoming, PhoneMissed,
+  Loader2, UserRound, PhoneIncoming,
 } from "lucide-react";
 import { supabase } from "../supabase/client";
 
@@ -47,6 +47,7 @@ export default function RealVoipPanel() {
   const inboxChannelRef = useRef<any>(null);
   const presenceChannelRef = useRef<any>(null);
   const callChannelRef = useRef<any>(null);
+  const callStatusChannelRef = useRef<any>(null);
   const activeCallRef = useRef<ActiveCall | null>(null);
   const userIdRef = useRef("");
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
@@ -69,6 +70,10 @@ export default function RealVoipPanel() {
     if (callChannelRef.current) {
       void supabase.removeChannel(callChannelRef.current);
       callChannelRef.current = null;
+    }
+    if (callStatusChannelRef.current) {
+      void supabase.removeChannel(callStatusChannelRef.current);
+      callStatusChannelRef.current = null;
     }
     pendingIceRef.current = [];
     processedSignalsRef.current.clear();
@@ -287,11 +292,26 @@ export default function RealVoipPanel() {
             setStatus(next.status === "declined" ? "Call declined" : next.status === "missed" ? "No answer" : "Call ended");
           }
         }).subscribe();
-      // Keep the status listener with the call channel lifecycle.
-      const existing = callChannelRef.current;
-      if (existing) {
-        // Both subscriptions are removed when the call ends.
-        (existing as any).__statusChannel = statusChannel;
+      callStatusChannelRef.current = statusChannel;
+      await new Promise<void>((resolve, reject) => {
+        const started = Date.now();
+        const check = () => {
+          if (statusChannel.state === "joined") resolve();
+          else if (statusChannel.state === "errored" || Date.now() - started > 10000) reject(new Error("Could not monitor call status."));
+          else setTimeout(check, 150);
+        };
+        check();
+      });
+      // Catch an answer that arrived while the caller was still setting up.
+      const { data: latestCall } = await supabase.from("webrtc_call_sessions")
+        .select("status").eq("id", callId).maybeSingle();
+      if (latestCall?.status === "accepted") {
+        if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+        setCallState("connecting");
+        setStatus("Call accepted • connecting audio…");
+      } else if (latestCall?.status === "declined" || latestCall?.status === "missed") {
+        cleanupMedia();
+        setStatus(latestCall.status === "declined" ? "Call declined" : "No answer");
       }
     } catch (err) {
       cleanupMedia();
