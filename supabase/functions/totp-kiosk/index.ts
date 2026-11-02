@@ -224,9 +224,10 @@ Deno.serve(async (req) => {
       const secret = await decryptSecret(row.encrypted_secret);
       const step = await verifyTotp(secret, String(body.code || ""));
       if (step === null) {
-        const { data: locked } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
+        const { data: locked, error: lockError } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
           p_employee_id: employeeId, p_org_id: actor.org_id,
         });
+        if (lockError) throw lockError;
         await admin.from("workforceiq_kiosk_audit").insert({ org_id: actor.org_id, employee_id: employeeId, actor_id: actorId, event_type: "AUTHENTICATION_FAILED" });
         return json({ error: locked ? "Too many attempts. Ask your administrator for help." : "Code not accepted. Check your authenticator and try again." }, locked ? 429 : 401);
       }
