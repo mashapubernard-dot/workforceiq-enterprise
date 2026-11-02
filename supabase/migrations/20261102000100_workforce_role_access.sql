@@ -118,6 +118,7 @@ $function$;
 
 REVOKE ALL ON FUNCTION private.set_workforce_user_role(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION private.set_workforce_user_role(uuid, text) FROM anon;
+GRANT USAGE ON SCHEMA private TO authenticated;
 GRANT EXECUTE ON FUNCTION private.set_workforce_user_role(uuid, text) TO authenticated;
 
 -- Expose a restricted RPC wrapper in the private schema is intentionally avoided:
