@@ -1,210 +1,50 @@
--- WorkforceIQ shared attendance kiosk (PIN-based first release).
--- Run this script in the Supabase SQL editor after reviewing it against the live schema.
+-- WorkforceIQ TOTP kiosk migration. Review against live schema before applying.
 create extension if not exists pgcrypto with schema extensions;
-
-create table if not exists public.workforceiq_kiosk_pins (
-  id uuid primary key default gen_random_uuid(),
-  org_id uuid not null,
-  employee_id uuid not null references public.user_profiles(id) on delete cascade,
-  pin_hash text not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (org_id, employee_id)
+create table if not exists public.workforceiq_kiosk_totp (
+ employee_id uuid primary key references public.user_profiles(id) on delete cascade,
+ org_id uuid not null, encrypted_secret text, pending_encrypted_secret text,
+ pending_expires_at timestamptz, enrolled_at timestamptz, last_used_step bigint,
+ failed_attempts integer not null default 0, locked_until timestamptz,
+ updated_at timestamptz not null default now()
 );
-alter table public.workforceiq_kiosk_pins enable row level security;
-revoke all on public.workforceiq_kiosk_pins from anon, authenticated;
+create index if not exists workforceiq_kiosk_totp_org_idx on public.workforceiq_kiosk_totp(org_id,enrolled_at);
+create table if not exists public.workforceiq_kiosk_audit (
+ id bigint generated always as identity primary key, org_id uuid not null, employee_id uuid,
+ actor_id uuid, event_type text not null, details jsonb not null default '{}'::jsonb,
+ created_at timestamptz not null default now()
+);
+create index if not exists workforceiq_kiosk_audit_org_created_idx on public.workforceiq_kiosk_audit(org_id,created_at desc);
+alter table public.workforceiq_kiosk_totp enable row level security;
+alter table public.workforceiq_kiosk_audit enable row level security;
+revoke all on public.workforceiq_kiosk_totp from anon,authenticated;
+revoke all on public.workforceiq_kiosk_audit from anon,authenticated;
 
-create or replace function public.admin_set_kiosk_pin(p_employee_id uuid, p_pin text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare v_org uuid; v_role text;
+create or replace function public.workforceiq_consume_kiosk_totp_step(p_employee_id uuid,p_org_id uuid,p_step bigint)
+returns boolean language plpgsql security definer set search_path=public as $$
+declare n integer;
 begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  select org_id, role::text into v_org, v_role
-  from public.user_profiles where id = auth.uid();
-  if v_org is null or lower(coalesce(v_role,'')) not in ('administrator','admin') then
-    raise exception 'Only a company administrator can register kiosk PINs';
-  end if;
-  if p_pin !~ '^[0-9]{6} (select 1 from public.user_profiles where id=p_employee_id and org_id=v_org) then
-    raise exception 'Employee does not belong to this company';
-  end if;
-  insert into public.workforceiq_kiosk_pins(org_id,employee_id,pin_hash,updated_at)
-  values(v_org,p_employee_id,extensions.crypt(p_pin,extensions.gen_salt('bf')),now())
-  on conflict(org_id,employee_id) do update
-    set pin_hash=excluded.pin_hash, updated_at=now();
-  return jsonb_build_object('success',true);
-end;
-$$;
+ update public.workforceiq_kiosk_totp set last_used_step=p_step,failed_attempts=0,locked_until=null,updated_at=now()
+ where employee_id=p_employee_id and org_id=p_org_id and enrolled_at is not null
+ and (last_used_step is null or last_used_step<p_step) and (locked_until is null or locked_until<now());
+ get diagnostics n=row_count; return n=1;
+end; $$;
 
-create or replace function public.admin_list_kiosk_pins()
-returns table(employee_id uuid, enrolled_at timestamptz)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare v_org uuid; v_role text;
+create or replace function public.workforceiq_kiosk_record_punch(p_employee_id uuid,p_org_id uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare open_id uuid; employee_name text; punch_time timestamptz:=now();
 begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  select org_id, role::text into v_org, v_role from public.user_profiles where id=auth.uid();
-  if v_org is null or lower(coalesce(v_role,'')) not in ('administrator','admin') then
-    raise exception 'Administrator access required';
-  end if;
-  return query select k.employee_id,k.created_at from public.workforceiq_kiosk_pins k where k.org_id=v_org;
-end;
-$$;
-
-create or replace function public.admin_remove_kiosk_pin(p_employee_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare v_org uuid; v_role text;
-begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  select org_id, role::text into v_org, v_role from public.user_profiles where id=auth.uid();
-  if v_org is null or lower(coalesce(v_role,'')) not in ('administrator','admin') then
-    raise exception 'Administrator access required';
-  end if;
-  delete from public.workforceiq_kiosk_pins where org_id=v_org and employee_id=p_employee_id;
-  return jsonb_build_object('success',true);
-end;
-$$;
-
-create or replace function public.kiosk_clock_action(p_pin text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  v_org uuid; v_employee uuid; v_name text; v_open_id uuid; v_time timestamptz := now();
-begin
-  if auth.uid() is null then raise exception 'Sign in to the company kiosk account first'; end if;
-  select org_id into v_org from public.user_profiles where id=auth.uid();
-  if v_org is null then raise exception 'Kiosk account is not linked to a company'; end if;
-  if p_pin !~ '^[0-9]{6}$' then raise exception 'Invalid employee PIN'; end if;
-  select k.employee_id, p.full_name into v_employee, v_name
-  from public.workforceiq_kiosk_pins k
-  join public.user_profiles p on p.id=k.employee_id and p.org_id=k.org_id
-  where k.org_id=v_org and k.pin_hash=extensions.crypt(p_pin,k.pin_hash)
-  limit 1;
-  if v_employee is null then raise exception 'PIN not recognised'; end if;
-  select id into v_open_id from public.attendance
-  where user_id=v_employee and clock_out is null
-  order by clock_in desc limit 1;
-  if v_open_id is not null then
-    update public.attendance set clock_out=v_time, status='Off Duty'
-    where id=v_open_id;
-    return jsonb_build_object('employee_name',v_name,'action','CLOCK_OUT','event_time',v_time);
-  else
-    insert into public.attendance(user_id,clock_in,status,status_started_at)
-    values(v_employee,v_time,'Working',null);
-    return jsonb_build_object('employee_name',v_name,'action','CLOCK_IN','event_time',v_time);
-  end if;
-end;
-$$;
-
-revoke all on function public.admin_set_kiosk_pin(uuid,text) from public, anon;
-revoke all on function public.admin_list_kiosk_pins() from public, anon;
-revoke all on function public.admin_remove_kiosk_pin(uuid) from public, anon;
-revoke all on function public.kiosk_clock_action(text) from public, anon;
-grant execute on function public.admin_set_kiosk_pin(uuid,text) to authenticated;
-grant execute on function public.admin_list_kiosk_pins() to authenticated;
-grant execute on function public.admin_remove_kiosk_pin(uuid) to authenticated;
-grant execute on function public.kiosk_clock_action(text) to authenticated;
- then raise exception 'PIN must be exactly six digits'; end if;
-  if exists (select 1 from public.workforceiq_kiosk_pins k where k.org_id=v_org and k.employee_id<>p_employee_id and k.pin_hash=extensions.crypt(p_pin,k.pin_hash)) then
-    raise exception 'That PIN is already assigned to another employee in this company';
-  end if;
-  if not exists (select 1 from public.user_profiles where id=p_employee_id and org_id=v_org) then
-    raise exception 'Employee does not belong to this company';
-  end if;
-  insert into public.workforceiq_kiosk_pins(org_id,employee_id,pin_hash,updated_at)
-  values(v_org,p_employee_id,extensions.crypt(p_pin,extensions.gen_salt('bf')),now())
-  on conflict(org_id,employee_id) do update
-    set pin_hash=excluded.pin_hash, updated_at=now();
-  return jsonb_build_object('success',true);
-end;
-$$;
-
-create or replace function public.admin_list_kiosk_pins()
-returns table(employee_id uuid, enrolled_at timestamptz)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare v_org uuid; v_role text;
-begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  select org_id, role::text into v_org, v_role from public.user_profiles where id=auth.uid();
-  if v_org is null or lower(coalesce(v_role,'')) not in ('administrator','admin') then
-    raise exception 'Administrator access required';
-  end if;
-  return query select k.employee_id,k.created_at from public.workforceiq_kiosk_pins k where k.org_id=v_org;
-end;
-$$;
-
-create or replace function public.admin_remove_kiosk_pin(p_employee_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare v_org uuid; v_role text;
-begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  select org_id, role::text into v_org, v_role from public.user_profiles where id=auth.uid();
-  if v_org is null or lower(coalesce(v_role,'')) not in ('administrator','admin') then
-    raise exception 'Administrator access required';
-  end if;
-  delete from public.workforceiq_kiosk_pins where org_id=v_org and employee_id=p_employee_id;
-  return jsonb_build_object('success',true);
-end;
-$$;
-
-create or replace function public.kiosk_clock_action(p_pin text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  v_org uuid; v_employee uuid; v_name text; v_open_id uuid; v_time timestamptz := now();
-begin
-  if auth.uid() is null then raise exception 'Sign in to the company kiosk account first'; end if;
-  select org_id into v_org from public.user_profiles where id=auth.uid();
-  if v_org is null then raise exception 'Kiosk account is not linked to a company'; end if;
-  if p_pin !~ '^[0-9]{6}$' then raise exception 'Invalid employee PIN'; end if;
-  select k.employee_id, p.full_name into v_employee, v_name
-  from public.workforceiq_kiosk_pins k
-  join public.user_profiles p on p.id=k.employee_id and p.org_id=k.org_id
-  where k.org_id=v_org and k.pin_hash=extensions.crypt(p_pin,k.pin_hash)
-  limit 1;
-  if v_employee is null then raise exception 'PIN not recognised'; end if;
-  select id into v_open_id from public.attendance
-  where user_id=v_employee and clock_out is null
-  order by clock_in desc limit 1;
-  if v_open_id is not null then
-    update public.attendance set clock_out=v_time, status='Off Duty'
-    where id=v_open_id;
-    return jsonb_build_object('employee_name',v_name,'action','CLOCK_OUT','event_time',v_time);
-  else
-    insert into public.attendance(user_id,clock_in,status,status_started_at)
-    values(v_employee,v_time,'Working',null);
-    return jsonb_build_object('employee_name',v_name,'action','CLOCK_IN','event_time',v_time);
-  end if;
-end;
-$$;
-
-revoke all on function public.admin_set_kiosk_pin(uuid,text) from public, anon;
-revoke all on function public.admin_list_kiosk_pins() from public, anon;
-revoke all on function public.admin_remove_kiosk_pin(uuid) from public, anon;
-revoke all on function public.kiosk_clock_action(text) from public, anon;
-grant execute on function public.admin_set_kiosk_pin(uuid,text) to authenticated;
-grant execute on function public.admin_list_kiosk_pins() to authenticated;
-grant execute on function public.admin_remove_kiosk_pin(uuid) to authenticated;
-grant execute on function public.kiosk_clock_action(text) to authenticated;
+ perform pg_advisory_xact_lock(hashtext(p_employee_id::text));
+ select full_name into employee_name from public.user_profiles where id=p_employee_id and org_id=p_org_id;
+ if employee_name is null then raise exception 'Employee not found for this company'; end if;
+ select id into open_id from public.attendance where user_id=p_employee_id and clock_out is null order by clock_in desc limit 1 for update;
+ if open_id is not null then
+  update public.attendance set clock_out=punch_time,status='Off Duty',status_started_at=punch_time where id=open_id;
+  return jsonb_build_object('employee_name',employee_name,'action','CLOCK_OUT','event_time',punch_time);
+ end if;
+ insert into public.attendance(user_id,clock_in,status,status_started_at) values(p_employee_id,punch_time,'Working',punch_time);
+ return jsonb_build_object('employee_name',employee_name,'action','CLOCK_IN','event_time',punch_time);
+end; $$;
+revoke all on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) from public,anon,authenticated;
+revoke all on function public.workforceiq_kiosk_record_punch(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) to service_role;
+grant execute on function public.workforceiq_kiosk_record_punch(uuid,uuid) to service_role;
