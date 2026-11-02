@@ -232,8 +232,12 @@ Deno.serve(async (req) => {
         p_employee_id: employeeId, p_org_id: actor.org_id, p_step: step,
       });
       if (consumeError || consumed !== true) return json({ error: "This code has already been used. Wait for the next code." }, 409);
-      const { data: punch, error: punchError } = await admin.rpc("workforceiq_kiosk_record_punch", {
+      const { data: punch, error: punchError } = await admin.rpc("workforceiq_kiosk_record_self_punch", {
         p_employee_id: employeeId, p_org_id: actor.org_id,
+        p_latitude: typeof body.latitude === "number" ? body.latitude : null,
+        p_longitude: typeof body.longitude === "number" ? body.longitude : null,
+        p_accuracy_m: typeof body.accuracy_m === "number" ? body.accuracy_m : null,
+        p_site_id: null, p_distance_m: null, p_geofence_status: null,
       });
       if (punchError) throw punchError;
       await admin.from("workforceiq_kiosk_audit").insert({
