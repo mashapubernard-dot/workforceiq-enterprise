@@ -28,7 +28,7 @@ begin
  where employee_id=p_employee_id and org_id=p_org_id and enrolled_at is not null
  and (last_used_step is null or last_used_step<p_step) and (locked_until is null or locked_until<now());
  get diagnostics n=row_count; return n=1;
-end; $;
+end; $$;
 
 -- This SECURITY DEFINER RPC must never be callable by browser roles.
 revoke all on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) from public, anon, authenticated;
