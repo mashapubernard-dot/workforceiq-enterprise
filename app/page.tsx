@@ -4524,15 +4524,71 @@ export default function Home() {
     "from-red-600 to-red-700";
  
   const tenantThemeClass =
-    profile?.orgName === "LemontreeCorp"
-      ? "theme-lemontree"
-      : profile?.orgName === "Mash IT Solutions"
-        ? "theme-mashit"
-        : "";
+    profile?.orgName === "WorkforceIQ Enterprise — Internal Operations"
+      ? "theme-internal-operations"
+      : profile?.orgName === "LemontreeCorp"
+        ? "theme-lemontree"
+        : profile?.orgName === "Mash IT Solutions"
+          ? "theme-mashit"
+          : "";
  
   return (
     <div className={`flex h-screen overflow-hidden ${tenantThemeClass}`}>
       <style jsx global>{`
+        /* === INTERNAL OPERATIONS: LEMON GROVE WEATHER === */
+        .theme-internal-operations {
+          isolation: isolate;
+          position: relative;
+          background:
+            radial-gradient(circle at 12% 12%, rgba(250, 220, 105, 0.22), transparent 30%),
+            radial-gradient(circle at 88% 22%, rgba(134, 200, 145, 0.18), transparent 34%),
+            linear-gradient(180deg, #f7fcf5 0%, #fffdf2 52%, #f1f8ed 100%);
+        }
+        .theme-internal-operations::before,
+        .theme-internal-operations::after {
+          content: "";
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: -1;
+        }
+        .theme-internal-operations::before {
+          background:
+            radial-gradient(circle at 78% 13%, rgba(255, 218, 92, 0.24) 0, rgba(255, 218, 92, 0.10) 9%, transparent 23%),
+            radial-gradient(ellipse at 15% 25%, rgba(255, 255, 255, 0.68), transparent 34%),
+            radial-gradient(ellipse at 88% 76%, rgba(178, 220, 174, 0.20), transparent 35%);
+          animation: internalSunGlow 18s ease-in-out infinite alternate;
+        }
+        .theme-internal-operations::after {
+          opacity: 0.30;
+          background-image:
+            radial-gradient(ellipse 90px 28px at 18% 20%, rgba(255,255,255,0.78) 0 55%, transparent 72%),
+            radial-gradient(ellipse 110px 34px at 22% 19%, rgba(255,255,255,0.68) 0 55%, transparent 72%),
+            radial-gradient(ellipse 120px 36px at 78% 32%, rgba(255,255,255,0.65) 0 55%, transparent 72%),
+            radial-gradient(ellipse 90px 28px at 82% 31%, rgba(255,255,255,0.72) 0 55%, transparent 72%),
+            repeating-linear-gradient(112deg, transparent 0 34px, rgba(111, 170, 190, 0.10) 35px 36px, transparent 37px 68px);
+          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 180px;
+          animation: internalCloudDrift 52s linear infinite, internalRainDrift 9s linear infinite;
+        }
+        @keyframes internalSunGlow {
+          from { opacity: 0.62; transform: scale(1); }
+          to { opacity: 1; transform: scale(1.035); }
+        }
+        @keyframes internalCloudDrift {
+          from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+          to { background-position: 70px 0, 70px 0, -90px 0, -90px 0, 0 0; }
+        }
+        @keyframes internalRainDrift {
+          from { background-position: 0 0, 0 0, 0 0, 0 0, 0 -180px; }
+          to { background-position: 70px 0, 70px 0, -90px 0, -90px 0, 0 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .theme-internal-operations::before,
+          .theme-internal-operations::after {
+            animation: none !important;
+          }
+        }
+
         /* === TENANT THEMES === */
  
         /* ---------- LEMON TREE ---------- */
