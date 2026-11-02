@@ -2612,7 +2612,7 @@ export default function Home() {
       });
 
       const code = window.prompt("Open Google Authenticator and enter your current six-digit code.");
-      if (!code || !/^\\d{6}$/.test(code)) {
+      if (!code || !/^\d{6}$/.test(code)) {
         throw new Error("A valid six-digit authenticator code is required.");
       }
 
