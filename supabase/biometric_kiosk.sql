@@ -87,16 +87,20 @@ as $self_punch$
 declare
   open_row public.attendance%rowtype;
   employee_name text;
+  employee_role text;
   punch_time timestamptz := now();
   site_row public.workforce_sites%rowtype;
   distance_m double precision;
   has_sites boolean;
 begin
   perform pg_advisory_xact_lock(hashtext(p_employee_id::text));
-  select full_name into employee_name
+  select full_name, role into employee_name, employee_role
   from public.user_profiles
   where id = p_employee_id and org_id = p_org_id;
   if not found then raise exception 'Employee not found for this company'; end if;
+  if lower(coalesce(employee_role, '')) in ('super admin', 'platform super admin') then
+    return jsonb_build_object('error', 'Platform administrator accounts do not use tenant employee attendance.');
+  end if;
 
   select * into open_row
   from public.attendance
