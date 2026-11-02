@@ -2596,21 +2596,9 @@ export default function Home() {
       const currentEmployee = employees.find((employee) => employee.id === profile.id);
       const isClockedIn = Boolean(currentEmployee?.clockInAt);
 
-      // Platform super-admin accounts are platform operators, not tenant employees.
-      // Keep their existing platform attendance behavior separate from employee TOTP.
+      // Platform operators are not tenant employees and cannot create tenant punches.
       if (profile.role === "Super Admin" || profile.role === "Platform Super Admin") {
-        const { error } = isClockedIn
-          ? await supabase.from("attendance").update({
-              clock_out: new Date().toISOString(), status: "Off Duty", status_started_at: null,
-            }).eq("user_id", profile.id).is("clock_out", null)
-          : await supabase.from("attendance").insert({
-              user_id: profile.id, clock_in: new Date().toISOString(), status: "Working", status_started_at: null,
-            });
-        if (error) throw error;
-        clearStoredStatusStartedAt(profile.id);
-        setStatusStartedAt(null);
-        await loadWorkforce(profile);
-        return;
+        throw new Error("Platform administrator accounts do not use tenant employee attendance.");
       }
 
       const getGpsPosition = () => new Promise<GeolocationPosition>((resolve, reject) => {
