@@ -279,9 +279,9 @@ const allNavItems = [
     iconBg: "bg-emerald-100 text-emerald-600",
   },
   {
-    name: "Authenticator Management",
+    name: "Authentication Management",
     icon: Fingerprint,
-    roles: ["Administrator"] as Role[],
+    roles: ["Super Admin", "Platform Super Admin"] as Role[],
     color: "from-red-600 to-rose-700",
     light: "bg-red-50 text-red-700 border-red-200",
     iconBg: "bg-red-100 text-red-600",
@@ -289,7 +289,7 @@ const allNavItems = [
   {
     name: "Role & Permissions",
     icon: Settings,
-    roles: ["Administrator"] as Role[],
+    roles: ["Super Admin", "Platform Super Admin"] as Role[],
     color: "from-rose-600 to-red-800",
     light: "bg-rose-50 text-rose-700 border-rose-200",
     iconBg: "bg-rose-100 text-rose-700",
@@ -575,8 +575,6 @@ const navGroups = [
     title: "Workforce Management",
     items: [
       "Time & Attendance",
-      "Authenticator Management",
-      "Role & Permissions",
       "Schedules",
       "People",
       "Performance",
@@ -617,16 +615,16 @@ const navGroups = [
     items: ["Dialer"],
   },
   {
-    title: "Company Administration",
-    items: ["Role & Permissions"],
+    title: "Platform Administration",
+    items: ["Role & Permissions", "Authentication Management", "Tenant Management", "Platform Billing"],
   },
   {
-    title: "Billing & Platform Administration",
-    items: ["Billing", "Tenant Management", "Platform Billing"],
+    title: "Billing",
+    items: ["Billing"],
   },
 ];
 
-const permissionTabNames = allNavItems.map((item) => item.name).filter((name) => !["Tenant Management", "Platform Billing", "Role & Permissions", "Authenticator Management"].includes(name));
+const permissionTabNames = allNavItems.map((item) => item.name).filter((name) => !["Tenant Management", "Platform Billing", "Role & Permissions", "Authentication Management"].includes(name));
 
 const statusOptions: AttendanceStatus[] = [
   "Working",
@@ -689,9 +687,9 @@ function canAccess(role: Role, section: string, blockedByRole: Record<string, st
   const item = allNavItems.find((navItem) => navItem.name === section);
   if (!item) return false;
   if (role === "Super Admin" || role === "Platform Super Admin") return item.roles.includes(role);
-  if (role === "Administrator") return section !== "Tenant Management" && section !== "Platform Billing";
+  if (role === "Administrator") return !["Tenant Management", "Platform Billing", "Role & Permissions", "Authentication Management"].includes(section);
   if (["Tenant Management", "Platform Billing"].includes(section)) return false;
-  if (["Role & Permissions", "Authenticator Management"].includes(section)) return false;
+  if (["Role & Permissions", "Authentication Management"].includes(section)) return false;
   if (Object.prototype.hasOwnProperty.call(blockedByRole, role)) {
     return !(blockedByRole[role] ?? []).includes(section);
   }
@@ -5251,11 +5249,11 @@ export default function Home() {
           )}
 
           {/* BIOMETRIC MANAGEMENT */}
-          {activeTab === "Authenticator Management" && profile?.role === "Administrator" && (
+          {activeTab === "Authentication Management" && (profile?.role === "Super Admin" || profile?.role === "Platform Super Admin") && (
             <BiometricManagementPanel employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))} />
           )}
 
-          {activeTab === "Role & Permissions" && profile?.role === "Administrator" && (
+          {activeTab === "Role & Permissions" && (profile?.role === "Super Admin" || profile?.role === "Platform Super Admin") && (
             <RolePermissionsPanel
               orgId={profile.orgId}
               tabNames={permissionTabNames}
@@ -10681,7 +10679,7 @@ export default function Home() {
             activeTab !==
               "Role & Permissions" &&
             activeTab !==
-              "Authenticator Management" &&
+              "Authentication Management" &&
             activeTab !==
               "Schedules" &&
             activeTab !==
