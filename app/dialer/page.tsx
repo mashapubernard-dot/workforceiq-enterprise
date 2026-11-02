@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import RealVoipPanel from "../RealVoipPanel";
 
 export default function DialerPage() {
   return (
@@ -14,7 +13,6 @@ export default function DialerPage() {
         >
           <ArrowLeft size={17} /> Back to dashboard
         </Link>
-        <RealVoipPanel />
       </div>
     </main>
   );
