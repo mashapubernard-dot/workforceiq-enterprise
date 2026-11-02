@@ -2596,16 +2596,17 @@ export default function Home() {
       const currentEmployee = employees.find((employee) => employee.id === profile.id);
       const isClockedIn = Boolean(currentEmployee?.clockInAt);
 
-      // Platform super-admin accounts are not tenant employees and retain their
-      // existing platform-only attendance behavior.
+      // Platform super-admin accounts are platform operators, not tenant employees.
+      // Keep their existing platform attendance behavior separate from employee TOTP.
       if (profile.role === "Super Admin" || profile.role === "Platform Super Admin") {
-        const code = window.prompt("Enter your six-digit authenticator code");
-        if (!code || !/^\\d{6}$/.test(code)) throw new Error("A valid six-digit authenticator code is required.");
-        const { data, error } = await supabase.functions.invoke("totp-kiosk", {
-          body: { action: "self_clock", code },
-        });
+        const { error } = isClockedIn
+          ? await supabase.from("attendance").update({
+              clock_out: new Date().toISOString(), status: "Off Duty", status_started_at: null,
+            }).eq("user_id", profile.id).is("clock_out", null)
+          : await supabase.from("attendance").insert({
+              user_id: profile.id, clock_in: new Date().toISOString(), status: "Working", status_started_at: null,
+            });
         if (error) throw error;
-        if (data?.error) throw new Error(data.error);
         clearStoredStatusStartedAt(profile.id);
         setStatusStartedAt(null);
         await loadWorkforce(profile);
