@@ -5605,7 +5605,8 @@ export default function Home() {
                           profile &&
                           canAccess(
                             profile.role,
-                            item[2]
+                            item[2],
+                            roleTabOverrides
                           )
                       )
                       .map(
