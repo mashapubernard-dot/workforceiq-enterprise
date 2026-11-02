@@ -153,13 +153,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "kiosk_list") {
-      const { data, error } = await admin.from("workforceiq_kiosk_totp")
-        .select("employee_id,user_profiles!inner(full_name)").eq("org_id", actor.org_id).not("enrolled_at", "is", null);
+      if (!isAdmin) return json({ error: "Company kiosk administrator sign-in required" }, 403);
+      const { data: enrolled, error } = await admin.from("workforceiq_kiosk_totp")
+        .select("employee_id").eq("org_id", actor.org_id).not("enrolled_at", "is", null);
       if (error) throw error;
-      return json({ employees: (data || []).map((r: any) => ({ id: r.employee_id, name: r.user_profiles?.full_name || "Employee" })) });
+      const ids = (enrolled || []).map((r: any) => r.employee_id);
+      if (!ids.length) return json({ employees: [] });
+      const { data: people, error: peopleError } = await admin.from("user_profiles")
+        .select("id,full_name").eq("org_id", actor.org_id).in("id", ids).order("full_name");
+      if (peopleError) throw peopleError;
+      return json({ employees: (people || []).map((p: any) => ({ id: p.id, name: p.full_name || "Employee" })) });
     }
 
     if (action === "clock") {
+      if (!isAdmin) return json({ error: "Company kiosk administrator sign-in required" }, 403);
       const employeeId = String(body.employee_id || "");
       const { data: row, error } = await admin.from("workforceiq_kiosk_totp")
         .select("encrypted_secret,failed_attempts,locked_until,last_used_step")
