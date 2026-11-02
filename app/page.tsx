@@ -66,9 +66,15 @@ import WorkforceForecastingPanel from "./WorkforceForecastingPanel";
 import SoftwareAssetManagementPanel from "./SoftwareAssetManagementPanel";
 import EnterpriseAssetManagementPanel from "./EnterpriseAssetManagementPanel";
 import BiometricManagementPanel from "./BiometricManagementPanel";
+import RolePermissionsPanel from "./RolePermissionsPanel";
+import { ROLE_DEFAULT_TABS, WORKFORCE_ROLES } from "../lib/role-permissions";
  
 type Role =
   | "Administrator"
+  | "HR"
+  | "Technical Associate"
+  | "IT"
+  | "Real-Time Analyst"
   | "Supervisor"
   | "Team Leader"
   | "Employee"
@@ -89,6 +95,7 @@ type Profile = {
   full_name: string;
   role: Role;
   orgName: string | null;
+  orgId: string | null;
 };
  
 type AttendanceRecord = {
@@ -274,6 +281,14 @@ const allNavItems = [
     color: "from-red-600 to-rose-700",
     light: "bg-red-50 text-red-700 border-red-200",
     iconBg: "bg-red-100 text-red-600",
+  },
+  {
+    name: "Role & Permissions",
+    icon: Settings,
+    roles: ["Administrator"] as Role[],
+    color: "from-rose-600 to-red-800",
+    light: "bg-rose-50 text-rose-700 border-rose-200",
+    iconBg: "bg-rose-100 text-rose-700",
   },
   {
     name: "GPS Live Field Map",
@@ -557,6 +572,7 @@ const navGroups = [
     items: [
       "Time & Attendance",
       "Authenticator Management",
+      "Role & Permissions",
       "Schedules",
       "People",
       "Performance",
@@ -597,10 +613,16 @@ const navGroups = [
     items: ["Dialer"],
   },
   {
+    title: "Company Administration",
+    items: ["Role & Permissions"],
+  },
+  {
     title: "Billing & Platform Administration",
     items: ["Billing", "Tenant Management", "Platform Billing"],
   },
 ];
+
+const permissionTabNames = allNavItems.map((item) => item.name).filter((name) => !["Tenant Management", "Platform Billing", "Role & Permissions"].includes(name));
 
 const statusOptions: AttendanceStatus[] = [
   "Working",
@@ -659,11 +681,18 @@ function getStatusClasses(status: AttendanceStatus) {
   }
 }
  
-function canAccess(role: Role, section: string) {
-  const item = allNavItems.find(
-    (navItem) => navItem.name === section
-  );
-  return item ? item.roles.includes(role) : false;
+function canAccess(role: Role, section: string, blockedByRole: Record<string, string[]> = {}) {
+  const item = allNavItems.find((navItem) => navItem.name === section);
+  if (!item) return false;
+  if (role === "Super Admin" || role === "Platform Super Admin") return item.roles.includes(role);
+  if (role === "Administrator") return section !== "Tenant Management" && section !== "Platform Billing";
+  if (Object.prototype.hasOwnProperty.call(blockedByRole, role)) {
+    return !(blockedByRole[role] ?? []).includes(section);
+  }
+  if (Object.prototype.hasOwnProperty.call(ROLE_DEFAULT_TABS, role)) {
+    return (ROLE_DEFAULT_TABS as Record<string, string[]>)[role]?.includes(section) ?? false;
+  }
+  return item.roles.includes(role);
 }
  
 function getInitials(name: string) {
@@ -1131,6 +1160,8 @@ export default function Home() {
     profile,
     setProfile,
   ] = useState<Profile | null>(null);
+
+  const [roleTabOverrides, setRoleTabOverrides] = useState<Record<string, string[]>>({});
  
   const [
     employees,
@@ -2363,6 +2394,10 @@ export default function Home() {
         const allowedRoles: Role[] =
           [
             "Administrator",
+            "HR",
+            "Technical Associate",
+            "IT",
+            "Real-Time Analyst",
             "Supervisor",
             "Team Leader",
             "Employee",
@@ -2412,11 +2447,27 @@ export default function Home() {
               profileData.role as Role,
             orgName:
               (profileData as any).organizations?.name ?? null,
+            orgId: profileData.org_id ?? null,
           };
  
         setProfile(
           userProfile
         );
+
+        if (profileData.org_id) {
+          const { data: permissionRows, error: permissionError } = await supabase
+            .from("organization_role_tab_access")
+            .select("role, blocked_tabs")
+            .eq("org_id", profileData.org_id);
+          if (permissionError) {
+            console.error("Could not load organisation role permissions:", permissionError);
+            setRoleTabOverrides({});
+          } else {
+            setRoleTabOverrides(Object.fromEntries((permissionRows ?? []).map((row: any) => [row.role, row.blocked_tabs ?? []])));
+          }
+        } else {
+          setRoleTabOverrides({});
+        }
 
         // Platform-level admins land directly in the billing control centre.
         if (userProfile.role === "Platform Super Admin") {
@@ -4873,7 +4924,7 @@ export default function Home() {
               (item) =>
                 group.items.includes(item.name) &&
                 profile &&
-                canAccess(profile.role, item.name)
+                canAccess(profile.role, item.name, roleTabOverrides)
             );
 
             if (groupItems.length === 0) return null;
@@ -5100,7 +5151,7 @@ export default function Home() {
                 {allNavItems.filter(
                   (item) =>
                     profile &&
-                    canAccess(profile.role, item.name) &&
+                    canAccess(profile.role, item.name, roleTabOverrides) &&
                     favoriteTabs.includes(item.name)
                 ).length === 0 && (
                   <button
@@ -5117,7 +5168,8 @@ export default function Home() {
                       profile &&
                       canAccess(
                         profile.role,
-                        item.name
+                        item.name,
+                        roleTabOverrides
                       ) &&
                       favoriteTabs.includes(item.name)
                   )
@@ -5198,6 +5250,14 @@ export default function Home() {
           {/* BIOMETRIC MANAGEMENT */}
           {activeTab === "Authenticator Management" && profile?.role === "Administrator" && (
             <BiometricManagementPanel employees={employees.map((employee) => ({ id: employee.id, name: employee.name, role: employee.role }))} />
+          )}
+
+          {activeTab === "Role & Permissions" && profile?.role === "Administrator" && (
+            <RolePermissionsPanel
+              orgId={profile.orgId}
+              tabNames={permissionTabNames}
+              onSaved={setRoleTabOverrides}
+            />
           )}
 
           {/* DASHBOARD */}
@@ -9534,7 +9594,30 @@ export default function Home() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-black truncate">{employee.name}</div>
-                          <div className="text-xs text-slate-500">{employee.role}</div>
+                          {profile?.role === "Administrator" && employee.id !== profile.id ? (
+                            <select
+                              aria-label={`Change ${employee.name} role`}
+                              value={employee.role}
+                              onChange={async (event) => {
+                                const nextRole = event.target.value as Role;
+                                const { error } = await supabase.rpc("set_workforce_user_role", {
+                                  target_user_id: employee.id,
+                                  new_role: nextRole,
+                                });
+                                if (error) {
+                                  window.alert(error.message);
+                                  return;
+                                }
+                                setEmployees((current) => current.map((person) => person.id === employee.id ? { ...person, role: nextRole } : person));
+                              }}
+                              className="mt-1 max-w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              {!WORKFORCE_ROLES.includes(employee.role as any) && <option value={employee.role}>{employee.role} (legacy)</option>}
+                              {WORKFORCE_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                            </select>
+                          ) : (
+                            <div className="text-xs text-slate-500">{employee.role}</div>
+                          )}
                         </div>
                       </div>
  
