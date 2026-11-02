@@ -2644,11 +2644,41 @@ export default function Home() {
       await loadWorkforce(profile);
     } catch (error: any) {
       console.error("Clock action error:", error);
-      setClockError(
-        error?.code === 1
-          ? "GPS permission is required to clock in. Please allow location access for WorkforceIQ."
-          : error?.message ?? "Unable to update attendance."
-      );
+
+      // Supabase FunctionsHttpError stores the Edge Function Response in
+      // error.context. Read a clone so the original response remains intact.
+      let responseMessage = "";
+      let responseStatus: number | undefined;
+
+      try {
+        const response = error?.context;
+        if (response && typeof response.status === "number") {
+          responseStatus = response.status;
+          const responseBody = await response.clone().json();
+          responseMessage =
+            responseBody?.error ||
+            responseBody?.message ||
+            responseBody?.details ||
+            "";
+        }
+      } catch (responseReadError) {
+        console.warn("Could not read attendance function response:", responseReadError);
+      }
+
+      let userMessage: string;
+      if (error?.code === 1) {
+        userMessage = "GPS permission is required to clock in. Please allow location access for WorkforceIQ.";
+      } else if (responseStatus === 429) {
+        userMessage = responseMessage || "Too many incorrect authenticator attempts. Attendance access is locked for five minutes. Please try again after the lockout expires.";
+      } else if (responseStatus === 401) {
+        userMessage = "Incorrect authenticator code. Please enter the current six-digit code from Google Authenticator and try again.";
+      } else if (responseStatus === 409) {
+        userMessage = "This authenticator code has already been used. Wait for the next six-digit code and try again.";
+      } else {
+        userMessage = responseMessage || error?.message || "Unable to update attendance. Please try again.";
+      }
+
+      setClockError(userMessage);
     } finally {
       setClockActionLoading(false);
     }
