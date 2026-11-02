@@ -17,11 +17,13 @@
     "react-dom": "latest",
     "tailwindcss": "^4.3.3",
     "@twilio/voice-sdk": "^2.15.0",
-    "twilio": "^5.5.0"
+    "twilio": "^5.5.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/node": "26.2.0",
     "@types/react": "19.2.18",
-    "typescript": "latest"
+    "typescript": "latest",
+    "@types/qrcode": "^1.5.5"
   }
 }

@@ -1,0 +1,267 @@
+-- WorkforceIQ TOTP kiosk migration. Review against live schema before applying.
+create table if not exists public.workforceiq_kiosk_totp (
+ employee_id uuid primary key references public.user_profiles(id) on delete cascade,
+ org_id uuid not null, encrypted_secret text, pending_encrypted_secret text,
+ pending_expires_at timestamptz, enrolled_at timestamptz, last_used_step bigint,
+ failed_attempts integer not null default 0, locked_until timestamptz,
+ updated_at timestamptz not null default now()
+);
+create index if not exists workforceiq_kiosk_totp_org_idx on public.workforceiq_kiosk_totp(org_id,enrolled_at);
+create table if not exists public.workforceiq_kiosk_audit (
+ id bigint generated always as identity primary key, org_id uuid not null, employee_id uuid,
+ actor_id uuid, event_type text not null, details jsonb not null default '{}'::jsonb,
+ created_at timestamptz not null default now()
+);
+create index if not exists workforceiq_kiosk_audit_org_created_idx on public.workforceiq_kiosk_audit(org_id,created_at desc);
+alter table public.workforceiq_kiosk_totp enable row level security;
+alter table public.workforceiq_kiosk_audit enable row level security;
+revoke all on public.workforceiq_kiosk_totp from public, anon, authenticated;
+revoke all on public.workforceiq_kiosk_audit from public, anon, authenticated;
+grant all on public.workforceiq_kiosk_totp to service_role;
+grant all on public.workforceiq_kiosk_audit to service_role;
+
+create or replace function public.workforceiq_consume_kiosk_totp_step(p_employee_id uuid,p_org_id uuid,p_step bigint)
+returns boolean language plpgsql security definer set search_path=public as $$
+declare n integer;
+begin
+ update public.workforceiq_kiosk_totp set last_used_step=p_step,failed_attempts=0,locked_until=null,updated_at=now()
+ where employee_id=p_employee_id and org_id=p_org_id and enrolled_at is not null
+ and (last_used_step is null or last_used_step<p_step) and (locked_until is null or locked_until<now());
+ get diagnostics n=row_count; return n=1;
+end; $$;
+
+-- This SECURITY DEFINER RPC must never be callable by browser roles.
+revoke all on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) from public, anon, authenticated;
+grant execute on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) to service_role;
+
+-- Atomically count failed TOTP attempts and enforce a five-minute lockout.
+create or replace function public.workforceiq_register_kiosk_totp_failure(
+  p_employee_id uuid,
+  p_org_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $function$
+declare
+  is_locked boolean;
+begin
+  update public.workforceiq_kiosk_totp
+  set failed_attempts = case when failed_attempts + 1 >= 5 then 0 else failed_attempts + 1 end,
+      locked_until = case when failed_attempts + 1 >= 5 then now() + interval '5 minutes' else locked_until end,
+      updated_at = now()
+  where employee_id = p_employee_id
+    and org_id = p_org_id
+    and (locked_until is null or locked_until <= now())
+  returning (locked_until is not null and locked_until > now()) into is_locked;
+
+  if not found then
+    return true;
+  end if;
+  return coalesce(is_locked, false);
+end;
+$function$;
+
+revoke all on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) to service_role;
+
+-- Remove the unused PIN-era RPC if it exists from an earlier rollout.
+drop function if exists public.workforceiq_kiosk_record_punch(uuid,uuid);
+
+-- Employee self-service punch RPC. Only the Edge Function service role may call it.
+-- Geofence checks happen inside PostgreSQL using the employee's tenant sites.
+create or replace function public.workforceiq_kiosk_record_self_punch(
+  p_employee_id uuid,
+  p_org_id uuid,
+  p_latitude double precision default null,
+  p_longitude double precision default null,
+  p_accuracy_m double precision default null,
+  p_site_id uuid default null,
+  p_distance_m double precision default null,
+  p_geofence_status text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $self_punch$
+declare
+  open_row public.attendance%rowtype;
+  employee_name text;
+  employee_role text;
+  punch_time timestamptz := now();
+  site_row public.workforce_sites%rowtype;
+  distance_m double precision;
+  has_sites boolean;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_employee_id::text));
+  select full_name, role into employee_name, employee_role
+  from public.user_profiles
+  where id = p_employee_id and org_id = p_org_id;
+  if not found then raise exception 'Employee not found for this company'; end if;
+  if lower(coalesce(employee_role, '')) in ('super admin', 'platform super admin') then
+    return jsonb_build_object('error', 'Platform administrator accounts do not use tenant employee attendance.');
+  end if;
+
+  select * into open_row
+  from public.attendance
+  where user_id = p_employee_id and org_id = p_org_id and clock_out is null
+  order by clock_in desc limit 1 for update;
+
+  if found then
+    update public.attendance
+    set clock_out = punch_time,
+        status = 'Off Duty',
+        status_started_at = null,
+        clock_out_latitude = p_latitude,
+        clock_out_longitude = p_longitude,
+        clock_out_accuracy_m = p_accuracy_m
+    where id = open_row.id;
+    return jsonb_build_object('employee_name', employee_name, 'action', 'CLOCK_OUT', 'event_time', punch_time);
+  end if;
+
+  if p_latitude is null or p_longitude is null
+     or p_latitude < -90 or p_latitude > 90
+     or p_longitude < -180 or p_longitude > 180
+     or (p_accuracy_m is not null and p_accuracy_m < 0) then
+    return jsonb_build_object('error', 'Valid GPS coordinates are required to clock in. Enable location services and try again.');
+  end if;
+
+  select exists(
+    select 1 from public.workforce_sites
+    where org_id = p_org_id and enabled = true and enforce_geofence = true
+  ) into has_sites;
+
+  if has_sites then
+    select s.*
+    into site_row
+    from public.workforce_sites s
+    where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
+      and s.latitude between -90 and 90
+      and s.longitude between -180 and 180
+      and s.radius_m > 0 and s.radius_m < 'Infinity'::double precision
+    order by 6371000 * 2 * asin(sqrt(least(1::double precision, greatest(0::double precision,
+      power(sin(radians(s.latitude - p_latitude) / 2), 2) +
+      cos(radians(p_latitude)) * cos(radians(s.latitude)) *
+      power(sin(radians(s.longitude - p_longitude) / 2), 2)
+    )))) asc
+    limit 1;
+
+    if found then
+      distance_m := 6371000 * 2 * asin(sqrt(least(1::double precision, greatest(0::double precision,
+        power(sin(radians(site_row.latitude - p_latitude) / 2), 2) +
+        cos(radians(p_latitude)) * cos(radians(site_row.latitude)) *
+        power(sin(radians(site_row.longitude - p_longitude) / 2), 2)
+      ))));
+    end if;
+
+    if site_row.id is null then
+      return jsonb_build_object('error', 'Your company work-site geofence is not configured correctly. Contact your administrator.');
+    end if;
+
+    if distance_m > coalesce(site_row.radius_m, 100) then
+      insert into public.workforce_geofence_events(
+        org_id,user_id,site_id,latitude,longitude,accuracy_m,distance_m,radius_m,result,reason
+      ) values (
+        p_org_id,p_employee_id,site_row.id,p_latitude,p_longitude,p_accuracy_m,
+        distance_m,coalesce(site_row.radius_m, 100),'OUTSIDE',
+        'Clock-in blocked outside the configured geofence.'
+      );
+      return jsonb_build_object(
+        'error',
+        format('Clock-in blocked: you are %s m from %s. Allowed distance is %s m.',
+          round(distance_m)::text, site_row.name, round(coalesce(site_row.radius_m, 100))::text)
+      );
+    end if;
+  end if;
+
+  insert into public.attendance(
+    user_id,org_id,clock_in,status,status_started_at,
+    clock_in_latitude,clock_in_longitude,clock_in_accuracy_m,
+    clock_in_distance_m,clock_in_geofence_status,clock_in_site_id
+  ) values (
+    p_employee_id,p_org_id,punch_time,'Working',null,
+    p_latitude,p_longitude,p_accuracy_m,
+    case when has_sites then distance_m else null end,
+    case when has_sites then 'INSIDE' else 'NO_GEOFENCE_CONFIGURED' end,
+    case when has_sites then site_row.id else null end
+  );
+
+  insert into public.workforce_geofence_events(
+    org_id,user_id,site_id,latitude,longitude,accuracy_m,distance_m,radius_m,result,reason
+  ) values (
+    p_org_id,p_employee_id,case when has_sites then site_row.id else null end,
+    p_latitude,p_longitude,p_accuracy_m,case when has_sites then distance_m else null end,
+    case when has_sites then site_row.radius_m else null end,
+    case when has_sites then 'INSIDE' else 'NO_GEOFENCE_CONFIGURED' end,
+    case when has_sites then 'Authenticator-verified clock-in inside configured geofence.'
+      else 'Authenticator-verified clock-in; no enforced geofence configured.' end
+  );
+
+  return jsonb_build_object('employee_name', employee_name, 'action', 'CLOCK_IN', 'event_time', punch_time);
+end;
+$self_punch$;
+
+revoke all on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) from public, anon, authenticated;
+grant execute on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) to service_role;
+
+
+
+-- Remove broad table grants so RLS cannot be bypassed with TRUNCATE or DELETE.
+revoke all on table public.user_profiles from public, anon, authenticated;
+grant select, insert, update on table public.user_profiles to authenticated;
+
+-- user_profiles previously allowed authenticated users to update their own role
+-- and tenant assignment, and had a permissive INSERT policy. Protect those
+-- authority fields because the TOTP service derives role/org from this table.
+drop policy if exists "Enable insert for authenticated" on public.user_profiles;
+drop policy if exists "Super Admins can insert profiles" on public.user_profiles;
+create policy "Super Admins can insert profiles"
+on public.user_profiles
+for insert
+to authenticated
+with check (public.is_super_admin());
+
+create or replace function public.workforceiq_protect_user_profile_security_fields()
+returns trigger
+language plpgsql
+set search_path = public
+as $profile_guard$
+begin
+  if auth.uid() is not null and not public.is_super_admin() then
+    if tg_op = 'INSERT' then
+      if new.id is distinct from auth.uid()
+         or new.role <> 'Employee'
+         or new.org_id is not null
+         or new.organization_id is not null
+         or new.tenant_id is not null
+         or new.force_logout_at is not null then
+        raise exception 'New user profiles must start as unassigned employees. A Super Admin must assign roles and tenants.';
+      end if;
+    elsif tg_op = 'UPDATE' and auth.uid() = old.id then
+      if new.role is distinct from old.role
+         or new.org_id is distinct from old.org_id
+         or new.organization_id is distinct from old.organization_id
+         or new.tenant_id is distinct from old.tenant_id
+         or new.force_logout_at is distinct from old.force_logout_at then
+        raise exception 'You cannot change your own role, tenant assignment, or session controls.';
+      end if;
+    end if;
+  end if;
+
+  return new;
+end;
+$profile_guard$;
+
+drop trigger if exists workforceiq_protect_user_profile_security_fields on public.user_profiles;
+create trigger workforceiq_protect_user_profile_security_fields
+before insert or update on public.user_profiles
+for each row execute function public.workforceiq_protect_user_profile_security_fields();
+
+revoke all on function public.workforceiq_protect_user_profile_security_fields() from public, anon, authenticated;
+
+
+-- Remove broad browser privileges from attendance only after the new app
+-- version is live. Apply supabase/attendance_totp_lockdown.sql as the
+-- post-deployment security step.
