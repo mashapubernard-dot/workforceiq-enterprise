@@ -255,8 +255,7 @@ for each row execute function public.workforceiq_protect_user_profile_security_f
 
 revoke all on function public.workforceiq_protect_user_profile_security_fields() from public, anon, authenticated;
 
--- Remove broad browser privileges (including DELETE/TRUNCATE) from attendance.
--- Authenticated users retain read access and may update only status fields.
-revoke all on table public.attendance from public, anon, authenticated;
-grant select on table public.attendance to authenticated;
-grant update (status, status_started_at) on table public.attendance to authenticated;
+
+-- Remove broad browser privileges from attendance only after the new app
+-- version is live. Apply supabase/attendance_totp_lockdown.sql as the
+-- post-deployment security step.
