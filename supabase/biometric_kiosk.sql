@@ -16,8 +16,10 @@ create table if not exists public.workforceiq_kiosk_audit (
 create index if not exists workforceiq_kiosk_audit_org_created_idx on public.workforceiq_kiosk_audit(org_id,created_at desc);
 alter table public.workforceiq_kiosk_totp enable row level security;
 alter table public.workforceiq_kiosk_audit enable row level security;
-revoke all on public.workforceiq_kiosk_totp from anon,authenticated;
-revoke all on public.workforceiq_kiosk_audit from anon,authenticated;
+revoke all on public.workforceiq_kiosk_totp from public, anon, authenticated;
+revoke all on public.workforceiq_kiosk_audit from public, anon, authenticated;
+grant all on public.workforceiq_kiosk_totp to service_role;
+grant all on public.workforceiq_kiosk_audit to service_role;
 
 create or replace function public.workforceiq_consume_kiosk_totp_step(p_employee_id uuid,p_org_id uuid,p_step bigint)
 returns boolean language plpgsql security definer set search_path=public as $$
@@ -62,6 +64,9 @@ $function$;
 
 revoke all on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) from public, anon, authenticated;
 grant execute on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) to service_role;
+
+-- Remove the unused PIN-era RPC if it exists from an earlier rollout.
+drop function if exists public.workforceiq_kiosk_record_punch(uuid,uuid);
 
 -- Employee self-service punch RPC. Only the Edge Function service role may call it.
 -- Geofence checks happen inside PostgreSQL using the employee's tenant sites.
@@ -189,5 +194,5 @@ grant execute on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,d
 
 -- Prevent browser clients from forging clock-in / clock-out timestamps or GPS.
 -- Employees may still change only their attendance status while clocked in.
-revoke insert, update on table public.attendance from anon, authenticated;
+revoke insert, update on table public.attendance from public, anon, authenticated;
 grant update (status, status_started_at) on table public.attendance to authenticated;
