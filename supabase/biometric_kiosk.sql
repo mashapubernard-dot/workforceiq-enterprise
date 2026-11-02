@@ -168,3 +168,9 @@ $$;
 
 revoke all on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) from public, anon, authenticated;
 grant execute on function public.workforceiq_kiosk_record_self_punch(uuid,uuid,double precision,double precision,double precision,uuid,double precision,text) to service_role;
+
+
+-- Prevent browser clients from forging clock-in / clock-out timestamps or GPS.
+-- Employees may still change only their attendance status while clocked in.
+revoke insert, update on table public.attendance from anon, authenticated;
+grant update (status, status_started_at) on table public.attendance to authenticated;
