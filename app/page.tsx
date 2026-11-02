@@ -4568,7 +4568,7 @@ export default function Home() {
             linear-gradient(112deg, transparent 0%, rgba(255,255,255,0) 38%, rgba(255,255,255,.62) 49%, rgba(255,255,255,0) 60%, transparent 100%);
           background-size: 145px 145px, 205px 205px, 240% 100%;
           background-position: 0 0, 65px 90px, -140% 0;
-          animation: platinumParticles 52s linear infinite, platinumSheen 22s ease-in-out infinite;
+          animation: platinumParticles 52s linear infinite;
         }
         @keyframes platinumLiquidDrift {
           0% { transform: translate3d(-1.2%, -1%, 0) scale(1); opacity: .62; }
@@ -4578,10 +4578,6 @@ export default function Home() {
         @keyframes platinumParticles {
           from { background-position: 0 0, 65px 90px, -140% 0; }
           to { background-position: 145px 290px, -140px 330px, 140% 0; }
-        }
-        @keyframes platinumSheen {
-          0%, 34% { background-position: 0 0, 65px 90px, -140% 0; }
-          72%, 100% { background-position: 0 0, 65px 90px, 140% 0; }
         }
         .theme-platinum aside {
           background: linear-gradient(180deg, #ffffff 0%, #f1f3f6 52%, #e9edf2 100%) !important;
