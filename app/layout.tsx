@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./global.css";
 import PresenceHeartbeat from "./PresenceHeartbeat";
+import RealVoipPanel from "./RealVoipPanel";
 
 export const metadata: Metadata = {
   title: {
@@ -22,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body><PresenceHeartbeat />{children}</body>
+      <body><PresenceHeartbeat /><RealVoipPanel />{children}</body>
     </html>
   );
 }
