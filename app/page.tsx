@@ -2590,244 +2590,71 @@ export default function Home() {
  
   async function handleClockToggle() {
     if (!profile || clockActionLoading) return;
-
     setClockActionLoading(true);
     setClockError("");
-
     try {
       const currentEmployee = employees.find((employee) => employee.id === profile.id);
       const isClockedIn = Boolean(currentEmployee?.clockInAt);
 
-      const getGpsPosition = () =>
-        new Promise<GeolocationPosition>((resolve, reject) => {
-          if (!navigator.geolocation) {
-            reject(new Error("This device does not provide GPS location."));
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            maximumAge: 10000,
-            timeout: 20000,
-          });
-        });
-
-      // Super Admin is the only role excluded from phone GPS tracking.
+      // Platform super-admin accounts are not tenant employees and retain their
+      // existing platform-only attendance behavior.
       if (profile.role === "Super Admin" || profile.role === "Platform Super Admin") {
-        if (isClockedIn) {
-          const { error } = await supabase
-            .from("attendance")
-            .update({
-              clock_out: new Date().toISOString(),
-              status: "Off Duty",
-              status_started_at: null,
-            })
-            .eq("user_id", profile.id)
-            .is("clock_out", null);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("attendance")
-            .insert({
-              user_id: profile.id,
-              clock_in: new Date().toISOString(),
-              status: "Working",
-              status_started_at: null,
-            });
-          if (error) throw error;
-        }
+        const code = window.prompt("Enter your six-digit authenticator code");
+        if (!code || !/^\\d{6}$/.test(code)) throw new Error("A valid six-digit authenticator code is required.");
+        const { data, error } = await supabase.functions.invoke("totp-kiosk", {
+          body: { action: "self_clock", code },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
         clearStoredStatusStartedAt(profile.id);
         setStatusStartedAt(null);
         await loadWorkforce(profile);
         return;
       }
 
-      if (isClockedIn) {
-        let position: GeolocationPosition | null = null;
-        try {
-          position = await getGpsPosition();
-        } catch (gpsError) {
-          console.warn("Clock-out GPS unavailable; completing clock-out without GPS:", gpsError);
+      const getGpsPosition = () => new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("This device does not provide GPS location."));
+          return;
         }
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true, maximumAge: 10000, timeout: 20000,
+        });
+      });
 
-        const updatePayload: Record<string, any> = {
-          clock_out: new Date().toISOString(),
-          status: "Off Duty",
-          status_started_at: null,
-        };
-
-        if (position) {
-          updatePayload.clock_out_latitude = position.coords.latitude;
-          updatePayload.clock_out_longitude = position.coords.longitude;
-          updatePayload.clock_out_accuracy_m = position.coords.accuracy ?? null;
-        }
-
-        const { error } = await supabase
-          .from("attendance")
-          .update(updatePayload)
-          .eq("user_id", profile.id)
-          .is("clock_out", null);
-
-        if (error) throw error;
-        clearStoredStatusStartedAt(profile.id);
-        setStatusStartedAt(null);
-      } else {
-        const position = await getGpsPosition();
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-        const accuracy = position.coords.accuracy ?? null;
-
-        const { data: enforcedSites, error: siteError } = await supabase
-          .from("workforce_sites")
-          .select("id,name,latitude,longitude,radius_m,enabled,enforce_geofence")
-          .eq("enabled", true)
-          .eq("enforce_geofence", true);
-
-        if (siteError) throw siteError;
-
-        const toRadians = (value: number) => (value * Math.PI) / 180;
-        const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-          const earthRadius = 6371000;
-          const dLat = toRadians(lat2 - lat1);
-          const dLon = toRadians(lon2 - lon1);
-          const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRadians(lat1)) *
-              Math.cos(toRadians(lat2)) *
-              Math.sin(dLon / 2) ** 2;
-          return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        };
-
-        let matchedSite: any = null;
-        let nearestSite: any = null;
-        let nearestDistance = Number.POSITIVE_INFINITY;
-
-        for (const site of enforcedSites ?? []) {
-          if (typeof site.latitude !== "number" || typeof site.longitude !== "number") continue;
-          const distance = distanceMeters(latitude, longitude, site.latitude, site.longitude);
-          const radius = Number(site.radius_m || 100);
-
-          if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestSite = { ...site, distance };
-          }
-
-          // A clock-in is valid if the employee is inside ANY enforced site boundary.
-          if (distance <= radius && (!matchedSite || distance < matchedSite.distance)) {
-            matchedSite = { ...site, distance };
-          }
-        }
-
-        if ((enforcedSites ?? []).length > 0 && !nearestSite) {
-          throw new Error("GPS sites are configured, but none has valid coordinates. Ask an administrator to configure the site.");
-        }
-        const { data: tenantContext } = await supabase
-          .from("user_profiles")
-          .select("org_id")
-          .eq("id", profile.id)
-          .maybeSingle();
-
-        if ((enforcedSites ?? []).length > 0 && !matchedSite && nearestSite) {
-          const radius = Number(nearestSite.radius_m || 100);
-          const reason =
-            "Clock-in blocked: you are " +
-            Math.round(nearestSite.distance) +
-            "m from " +
-            nearestSite.name +
-            ". The allowed geo-fence is " +
-            Math.round(radius) +
-            "m.";
-
-          if (tenantContext?.org_id) {
-            const { error: eventError } = await supabase
-              .from("workforce_geofence_events")
-              .insert({
-                org_id: tenantContext.org_id,
-                user_id: profile.id,
-                site_id: nearestSite.id,
-                latitude,
-                longitude,
-                accuracy_m: accuracy,
-                distance_m: nearestSite.distance,
-                radius_m: radius,
-                result: "OUTSIDE",
-                reason,
-              });
-            if (eventError) console.warn("Could not save blocked geofence attempt:", eventError);
-          }
-
-          throw new Error(reason);
-        }
-        const { error } = await supabase
-          .from("attendance")
-          .insert({
-            user_id: profile.id,
-            clock_in: new Date().toISOString(),
-            status: "Working",
-            status_started_at: null,
-            clock_in_latitude: latitude,
-            clock_in_longitude: longitude,
-            clock_in_accuracy_m: accuracy,
-            clock_in_distance_m: matchedSite?.distance ?? null,
-            clock_in_geofence_status: matchedSite ? "INSIDE" : "NO_GEOFENCE_CONFIGURED",
-            clock_in_site_id: matchedSite?.id ?? null,
-          });
-
-        if (error) throw error;
-
-        if (tenantContext?.org_id) {
-          const { error: eventError } = await supabase
-            .from("workforce_geofence_events")
-            .insert({
-              org_id: tenantContext.org_id,
-              user_id: profile.id,
-              site_id: matchedSite?.id ?? null,
-              latitude,
-              longitude,
-              accuracy_m: accuracy,
-              distance_m: matchedSite?.distance ?? null,
-              radius_m: matchedSite ? Number(matchedSite.radius_m || 100) : null,
-              result: matchedSite ? "INSIDE" : "NO_GEOFENCE_CONFIGURED",
-              reason: matchedSite
-                ? "Clock-in accepted inside the configured geofence."
-                : "Clock-in accepted because no enforced geofence is configured.",
-            });
-          if (eventError) console.warn("Could not save geofence clock-in event:", eventError);
-        }
-
-        clearStoredStatusStartedAt(profile.id);
-        setStatusStartedAt(null);
+      const code = window.prompt("Open Google Authenticator and enter your current six-digit code.");
+      if (!code || !/^\\d{6}$/.test(code)) {
+        throw new Error("A valid six-digit authenticator code is required.");
       }
 
+      let position: GeolocationPosition | null = null;
+      if (!isClockedIn) {
+        // GPS is mandatory for clock-in. The server independently checks the
+        // submitted coordinates against this employee's tenant geofences.
+        position = await getGpsPosition();
+      } else {
+        // Clock-out remains possible if GPS is unavailable, as before.
+        try { position = await getGpsPosition(); }
+        catch (gpsError) { console.warn("Clock-out GPS unavailable:", gpsError); }
+      }
+
+      const { data, error } = await supabase.functions.invoke("totp-kiosk", {
+        body: {
+          action: "self_clock",
+          code,
+          latitude: position?.coords.latitude ?? null,
+          longitude: position?.coords.longitude ?? null,
+          accuracy_m: position?.coords.accuracy ?? null,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      clearStoredStatusStartedAt(profile.id);
+      setStatusStartedAt(null);
       await loadWorkforce(profile);
     } catch (error: any) {
       console.error("Clock action error:", error);
-      if (
-        error?.code === 1 &&
-        profile &&
-        profile.role !== "Super Admin" &&
-        profile.role !== "Platform Super Admin"
-      ) {
-        try {
-          const { data: tenantContext } = await supabase
-            .from("user_profiles")
-            .select("org_id")
-            .eq("id", profile.id)
-            .maybeSingle();
-          if (tenantContext?.org_id) {
-            const { error: eventError } = await supabase
-              .from("workforce_geofence_events")
-              .insert({
-                org_id: tenantContext.org_id,
-                user_id: profile.id,
-                result: "GPS_PERMISSION_DENIED",
-                reason: "Clock-in could not continue because device location permission was denied or unavailable.",
-              });
-            if (eventError) console.warn("Could not save GPS permission event:", eventError);
-          }
-        } catch (eventLogError) {
-          console.warn("Could not record GPS permission issue:", eventLogError);
-        }
-      }
       setClockError(
         error?.code === 1
           ? "GPS permission is required to clock in. Please allow location access for WorkforceIQ."
