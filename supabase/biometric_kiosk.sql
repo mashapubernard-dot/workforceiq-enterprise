@@ -1,5 +1,4 @@
 -- WorkforceIQ TOTP kiosk migration. Review against live schema before applying.
-create extension if not exists pgcrypto with schema extensions;
 create table if not exists public.workforceiq_kiosk_totp (
  employee_id uuid primary key references public.user_profiles(id) on delete cascade,
  org_id uuid not null, encrypted_secret text, pending_encrypted_secret text,
@@ -83,8 +82,8 @@ create or replace function public.workforceiq_kiosk_record_self_punch(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, extensions
-as $$
+set search_path = public
+as $
 declare
   open_row public.attendance%rowtype;
   employee_name text;
