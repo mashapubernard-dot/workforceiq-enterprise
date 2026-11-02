@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   Phone, PhoneOff, Mic, MicOff, Wifi, AlertCircle, CheckCircle2,
   Loader2, UserRound, PhoneIncoming,
@@ -28,6 +29,8 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 export default function RealVoipPanel() {
+  const pathname = usePathname();
+  const isDialerPage = pathname === "/dialer";
   const [userId, setUserId] = useState("");
   const [orgId, setOrgId] = useState("");
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
@@ -450,6 +453,26 @@ export default function RealVoipPanel() {
       if (presenceChannelRef.current) void supabase.removeChannel(presenceChannelRef.current);
     };
   }, [cleanupMedia]);
+
+  if (!isDialerPage) {
+    if (!incoming) return <audio ref={remoteAudioRef} autoPlay playsInline />;
+    return (
+      <>
+        <audio ref={remoteAudioRef} autoPlay playsInline />
+        <div className="fixed inset-x-3 top-3 z-[9999] mx-auto max-w-lg rounded-2xl border border-emerald-300 bg-white p-4 shadow-2xl">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><PhoneIncoming /></div>
+            <div className="min-w-0 flex-1"><div className="font-black text-slate-900">Incoming WorkforceIQ call</div><div className="truncate text-sm text-slate-600">{incoming.callerName} is calling you</div></div>
+          </div>
+          {error && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">{error}</p>}
+          <div className="mt-4 flex gap-2">
+            <button type="button" disabled={busy} onClick={() => void declineCall()} className="flex-1 rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">Decline</button>
+            <button type="button" disabled={busy} onClick={() => void acceptCall()} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-50">{busy ? "Connecting…" : "Answer call"}</button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <section className="mb-5 overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-sm">
