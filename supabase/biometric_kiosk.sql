@@ -63,26 +63,6 @@ $function$;
 revoke all on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) from public, anon, authenticated;
 grant execute on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) to service_role;
 
-create or replace function public.workforceiq_kiosk_record_punch(p_employee_id uuid,p_org_id uuid)
-returns jsonb language plpgsql security definer set search_path=public as $$
-declare open_id uuid; employee_name text; punch_time timestamptz:=now();
-begin
- perform pg_advisory_xact_lock(hashtext(p_employee_id::text));
- select full_name into employee_name from public.user_profiles where id=p_employee_id and org_id=p_org_id;
- if employee_name is null then raise exception 'Employee not found for this company'; end if;
- select id into open_id from public.attendance where user_id=p_employee_id and clock_out is null order by clock_in desc limit 1 for update;
- if open_id is not null then
-  update public.attendance set clock_out=punch_time,status='Off Duty',status_started_at=punch_time where id=open_id;
-  return jsonb_build_object('employee_name',employee_name,'action','CLOCK_OUT','event_time',punch_time);
- end if;
- insert into public.attendance(user_id,clock_in,status,status_started_at) values(p_employee_id,punch_time,'Working',punch_time);
- return jsonb_build_object('employee_name',employee_name,'action','CLOCK_IN','event_time',punch_time);
-end; $$;
-revoke all on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) from public,anon,authenticated;
-revoke all on function public.workforceiq_kiosk_record_punch(uuid,uuid) from public,anon,authenticated;
-grant execute on function public.workforceiq_consume_kiosk_totp_step(uuid,uuid,bigint) to service_role;
-grant execute on function public.workforceiq_kiosk_record_punch(uuid,uuid) to service_role;
-
 -- Employee self-service punch RPC. Only the Edge Function service role may call it.
 -- Geofence checks happen inside PostgreSQL using the employee's tenant sites.
 create or replace function public.workforceiq_kiosk_record_self_punch(
