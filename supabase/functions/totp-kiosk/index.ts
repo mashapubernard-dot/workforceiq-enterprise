@@ -114,7 +114,6 @@ Deno.serve(async (req) => {
         const { error } = await admin.from("workforceiq_kiosk_totp").upsert({
           employee_id: employeeId, org_id: actor.org_id, pending_encrypted_secret: encrypted,
           pending_expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-          encrypted_secret: null, enrolled_at: null, last_used_step: null,
           failed_attempts: 0, locked_until: null, updated_at: new Date().toISOString(),
         }, { onConflict: "employee_id" });
         if (error) throw error;
@@ -137,9 +136,10 @@ Deno.serve(async (req) => {
         const secret = await decryptSecret(row.pending_encrypted_secret);
         const step = await verifyTotp(secret, String(body.code || ""));
         if (step === null) {
-          const { data: locked } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
+          const { data: locked, error: lockError } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
             p_employee_id: employeeId, p_org_id: actor.org_id,
           });
+          if (lockError) throw lockError;
           await admin.from("workforceiq_kiosk_audit").insert({ org_id: actor.org_id, employee_id: employeeId, actor_id: actorId, event_type: "ENROLLMENT_VERIFICATION_FAILED" });
           return json({ error: locked ? "Too many incorrect codes. Wait five minutes or ask your administrator to restart setup." : "Code not accepted. Check the current six-digit code and try again." }, locked ? 429 : 400);
         }
@@ -170,9 +170,10 @@ Deno.serve(async (req) => {
       if (row.locked_until && new Date(row.locked_until).getTime() > Date.now()) return json({ error: "Too many attempts. Wait five minutes." }, 429);
       const step = await verifyTotp(await decryptSecret(row.encrypted_secret), String(body.code || ""));
       if (step === null) {
-        const { data: locked } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
+        const { data: locked, error: lockError } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
           p_employee_id: employeeId, p_org_id: actor.org_id,
         });
+        if (lockError) throw lockError;
         await admin.from("workforceiq_kiosk_audit").insert({
           org_id: actor.org_id, employee_id: employeeId, actor_id: actorId,
           event_type: "AUTHENTICATION_FAILED", details: { method: "SELF_SERVICE_TOTP" },
