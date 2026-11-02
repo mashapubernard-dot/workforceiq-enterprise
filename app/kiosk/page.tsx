@@ -12,10 +12,12 @@ export default function AttendanceKioskPage() {
   const [result,setResult]=useState<Result|null>(null);
   const [error,setError]=useState("");
   const [ready,setReady]=useState(false);
-  useEffect(()=>{supabase.auth.getSession().then(({data})=>setReady(!!data.session));},[]);
+  const [signedIn,setSignedIn]=useState(false);
+  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSignedIn(!!data.session);setReady(true);});},[]);
   function press(value:string){if(busy)return;setError("");setResult(null);setPin(v=>(v+value).slice(0,6));}
   async function submit(){if(pin.length!==6){setError("Enter your six-digit employee PIN.");return;}setBusy(true);setError("");setResult(null);const {data,error:rpcError}=await supabase.rpc("kiosk_clock_action",{p_pin:pin});setBusy(false);setPin("");if(rpcError){setError(rpcError.message);return;}setResult(data as Result);}
   if(!ready)return <main className="min-h-screen grid place-items-center bg-slate-950 text-white"><p>Checking secure kiosk session…</p></main>;
+  if(!signedIn)return <main className="min-h-screen grid place-items-center bg-slate-950 px-5 text-center text-white"><div><ShieldCheck className="mx-auto mb-4" size={42}/><h1 className="text-2xl font-black">Kiosk sign-in required</h1><p className="mt-2 max-w-sm text-slate-300">A company administrator must sign in on this device before employees can use the attendance kiosk.</p><a href="/login" className="mt-5 inline-block rounded-xl bg-red-600 px-5 py-3 font-bold">Sign in</a></div></main>;
   return <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-red-950 px-4 py-8 text-white">
     <div className="mx-auto flex min-h-[85vh] max-w-md flex-col items-center justify-center">
       <div className="mb-8 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-600 shadow-xl shadow-red-950/40"><Clock3 size={32}/></div><p className="mt-4 text-xs font-black tracking-[.3em] text-red-300">WORKFORCEIQ</p><h1 className="mt-2 text-3xl font-black">Attendance kiosk</h1><p className="mt-2 text-sm text-slate-300">Enter your personal employee PIN to clock in or out.</p></div>
