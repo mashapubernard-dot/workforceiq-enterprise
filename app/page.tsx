@@ -4523,139 +4523,128 @@ export default function Home() {
     activeNav?.color ??
     "from-red-600 to-red-700";
  
-  const tenantThemeClass =
-    profile?.orgName === "WorkforceIQ Enterprise — Internal Operations"
-      ? "theme-internal-operations"
-      : profile?.orgName === "LemontreeCorp"
-        ? "theme-lemontree"
-        : profile?.orgName === "Mash IT Solutions"
-          ? "theme-mashit"
-          : "";
+  // Platinum Enterprise is the temporary platform-wide default.
+  // Tenant-specific themes can be re-enabled here when each tenant's branding is finalised.
+  const tenantThemeClass = "theme-platinum";
  
   return (
     <div className={`flex h-screen overflow-hidden ${tenantThemeClass}`}>
       <style jsx global>{`
-        /* === INTERNAL OPERATIONS: PREMIUM LEMON GROVE === */
-        .theme-internal-operations {
+        /* === PLATINUM ENTERPRISE: PLATFORM-WIDE DEFAULT === */
+        .theme-platinum {
           isolation: isolate;
           position: relative;
           background:
-            radial-gradient(ellipse at 82% 8%, rgba(246, 221, 126, 0.17), transparent 27%),
-            radial-gradient(ellipse at 12% 82%, rgba(129, 184, 139, 0.13), transparent 34%),
-            linear-gradient(145deg, #f7faf5 0%, #f4f8f1 48%, #fbfaf2 100%);
-          color: #24352b;
+            radial-gradient(ellipse at 12% 12%, rgba(255,255,255,.98), transparent 34%),
+            radial-gradient(ellipse at 88% 18%, rgba(214,220,229,.55), transparent 36%),
+            linear-gradient(135deg, #f8f9fb 0%, #edf0f4 48%, #fafbfc 100%);
+          color: #202733;
         }
-        .theme-internal-operations::before,
-        .theme-internal-operations::after {
+        .theme-platinum::before,
+        .theme-platinum::after {
           content: "";
           position: fixed;
-          inset: 0;
+          inset: -12%;
           pointer-events: none;
           z-index: -1;
+          will-change: transform, opacity, background-position;
         }
-        /* Gentle sunlight and soft botanical atmosphere */
-        .theme-internal-operations::before {
+        /* Slow liquid-platinum light fields */
+        .theme-platinum::before {
           background:
-            radial-gradient(circle at 78% 13%, rgba(255, 224, 132, 0.24), transparent 22%),
-            radial-gradient(ellipse at 18% 22%, rgba(255,255,255,0.65), transparent 32%),
-            radial-gradient(ellipse at 86% 78%, rgba(155, 199, 154, 0.14), transparent 34%);
-          animation: internalGroveGlow 24s ease-in-out infinite alternate;
+            radial-gradient(ellipse 38% 24% at 18% 26%, rgba(255,255,255,.88), transparent 72%),
+            radial-gradient(ellipse 42% 28% at 78% 68%, rgba(190,199,211,.34), transparent 72%),
+            radial-gradient(ellipse 28% 22% at 58% 12%, rgba(255,255,255,.72), transparent 74%);
+          filter: blur(18px);
+          opacity: .78;
+          animation: platinumLiquidDrift 34s ease-in-out infinite alternate;
         }
-        /* Slow cloud drift with a very faint passing-rain texture */
-        .theme-internal-operations::after {
-          opacity: 0.19;
+        /* Fine metallic grain, floating pinpoints and a travelling reflection */
+        .theme-platinum::after {
+          opacity: .42;
           background-image:
-            radial-gradient(ellipse 115px 34px at 17% 19%, rgba(255,255,255,0.9) 0 55%, transparent 73%),
-            radial-gradient(ellipse 145px 42px at 23% 18%, rgba(255,255,255,0.78) 0 55%, transparent 73%),
-            radial-gradient(ellipse 125px 38px at 78% 34%, rgba(255,255,255,0.8) 0 55%, transparent 73%),
-            repeating-linear-gradient(112deg, transparent 0 48px, rgba(103, 155, 168, 0.07) 49px 50px, transparent 51px 92px);
-          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 210px;
-          animation: internalGroveClouds 64s linear infinite;
+            radial-gradient(circle, rgba(255,255,255,.95) 0 1px, transparent 1.8px),
+            radial-gradient(circle, rgba(148,158,173,.34) 0 1px, transparent 1.8px),
+            linear-gradient(112deg, transparent 0%, rgba(255,255,255,0) 38%, rgba(255,255,255,.62) 49%, rgba(255,255,255,0) 60%, transparent 100%);
+          background-size: 145px 145px, 205px 205px, 240% 100%;
+          background-position: 0 0, 65px 90px, -140% 0;
+          animation: platinumParticles 52s linear infinite;
         }
-        @keyframes internalGroveGlow {
-          from { opacity: 0.58; transform: scale(1); }
-          to { opacity: 0.92; transform: scale(1.025); }
+        @keyframes platinumLiquidDrift {
+          0% { transform: translate3d(-1.2%, -1%, 0) scale(1); opacity: .62; }
+          50% { transform: translate3d(1%, .8%, 0) scale(1.035); opacity: .88; }
+          100% { transform: translate3d(-.4%, 1.4%, 0) scale(1.015); opacity: .72; }
         }
-        @keyframes internalGroveClouds {
-          from { background-position: 0 0, 0 0, 0 0, 0 -210px; }
-          to { background-position: 85px 0, 85px 0, -105px 0, 0 0; }
+        @keyframes platinumParticles {
+          from { background-position: 0 0, 65px 90px, -140% 0; }
+          to { background-position: 145px 290px, -140px 330px, 140% 0; }
         }
-
-        /* Deep evergreen navigation: premium enterprise contrast */
-        .theme-internal-operations aside {
-          background: linear-gradient(180deg, #183b2b 0%, #204b35 54%, #173728 100%) !important;
-          border-right: 1px solid rgba(222, 239, 211, 0.14);
-          box-shadow: 8px 0 28px rgba(25, 59, 42, 0.10);
+        .theme-platinum aside {
+          background: linear-gradient(180deg, #ffffff 0%, #f1f3f6 52%, #e9edf2 100%) !important;
+          color: #26303c !important;
+          border-right: 1px solid #d8dde5 !important;
+          box-shadow: 8px 0 28px rgba(35,45,60,.07);
         }
-        .theme-internal-operations aside .text-red-500,
-        .theme-internal-operations aside .text-red-400 {
-          color: #f3d96b !important;
+        .theme-platinum aside .text-white { color: #202733 !important; }
+        .theme-platinum aside .text-red-500,
+        .theme-platinum aside .text-red-400 { color: #727d8c !important; }
+        .theme-platinum aside .text-slate-400,
+        .theme-platinum aside .text-slate-500 { color: #687383 !important; }
+        .theme-platinum aside .hover\\:bg-white\\/5:hover {
+          background: rgba(120,132,148,.10) !important;
         }
-        .theme-internal-operations aside .bg-red-600,
-        .theme-internal-operations aside .bg-red-700 {
-          background-color: #78a95b !important;
+        .theme-platinum header {
+          background: rgba(255,255,255,.82) !important;
+          border-bottom: 1px solid rgba(205,212,222,.9) !important;
+          backdrop-filter: blur(18px) saturate(135%);
+          box-shadow: 0 4px 22px rgba(32,39,51,.045);
         }
-        .theme-internal-operations aside .bg-gradient-to-br {
-          background-image: linear-gradient(135deg, #83b96a, #e3c85a) !important;
+        .theme-platinum main { position: relative; }
+        .theme-platinum .bg-white,
+        .theme-platinum .bg-white\\/90 {
+          background-color: rgba(255,255,255,.82) !important;
+          backdrop-filter: blur(14px) saturate(125%);
         }
-        .theme-internal-operations aside .text-slate-400,
-        .theme-internal-operations aside .text-slate-500 {
-          color: #c2d5c5 !important;
+        .theme-platinum .border-slate-200 { border-color: #dce1e8 !important; }
+        .theme-platinum .rounded-2xl.border-slate-200,
+        .theme-platinum .rounded-2xl.bg-white {
+          box-shadow: 0 7px 24px rgba(35,45,60,.055), 0 1px 2px rgba(35,45,60,.035) !important;
+          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
         }
-        .theme-internal-operations aside .hover\\:bg-white\\/5:hover {
-          background-color: rgba(255,255,255,0.09) !important;
+        .theme-platinum main .rounded-2xl.border-slate-200:hover,
+        .theme-platinum main .rounded-2xl.bg-white:hover {
+          transform: translateY(-2px);
+          border-color: #c4ccd7 !important;
+          box-shadow: 0 12px 30px rgba(35,45,60,.085), 0 2px 5px rgba(35,45,60,.04) !important;
         }
-
-        /* Refined translucent header and readable content surfaces */
-        .theme-internal-operations header {
-          background: rgba(250, 253, 247, 0.91) !important;
-          border-bottom-color: #dce8d8 !important;
-          backdrop-filter: blur(16px);
-          box-shadow: 0 3px 18px rgba(36, 73, 48, 0.045);
-        }
-        .theme-internal-operations ::selection { background: #e9d878; color: #203a2a; }
-        .theme-internal-operations .bg-white,
-        .theme-internal-operations .bg-white\\/90 {
-          background-color: rgba(255, 255, 252, 0.94) !important;
-        }
-        .theme-internal-operations .border-slate-200 {
-          border-color: #dce8d9 !important;
-        }
-        .theme-internal-operations .rounded-2xl.border-slate-200,
-        .theme-internal-operations .rounded-2xl.bg-white {
-          box-shadow: 0 5px 22px rgba(39, 76, 49, 0.055), 0 1px 2px rgba(39, 76, 49, 0.035) !important;
-        }
-        .theme-internal-operations .text-slate-900 { color: #213b2c !important; }
-        .theme-internal-operations .text-slate-800 { color: #294633 !important; }
-        .theme-internal-operations .text-slate-700 { color: #3d5c43 !important; }
-        .theme-internal-operations .text-slate-600,
-        .theme-internal-operations .text-slate-500 { color: #6c806d !important; }
-        .theme-internal-operations .divide-slate-100 > * + * { border-color: #edf2e9 !important; }
-
-        /* Green/yellow accents for primary actions, without changing status colours */
-        .theme-internal-operations main button[class*="bg-gradient-to"],
-        .theme-internal-operations main button.bg-red-600 {
-          transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-        }
-        .theme-internal-operations main button[class*="bg-gradient-to"]:hover {
-          filter: saturate(1.08) brightness(1.025);
-          box-shadow: 0 5px 16px rgba(64, 112, 66, 0.16);
-        }
-        .theme-internal-operations main button:focus-visible,
-        .theme-internal-operations aside button:focus-visible {
-          outline: 2px solid #d6bd4d;
+        .theme-platinum .text-slate-900 { color: #202733 !important; }
+        .theme-platinum .text-slate-800 { color: #303a48 !important; }
+        .theme-platinum .text-slate-700 { color: #414c5b !important; }
+        .theme-platinum .text-slate-600,
+        .theme-platinum .text-slate-500 { color: #697586 !important; }
+        .theme-platinum .divide-slate-100 > * + * { border-color: #e9edf2 !important; }
+        .theme-platinum button { transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease; }
+        .theme-platinum button:focus-visible {
+          outline: 2px solid #a8b1bf;
           outline-offset: 3px;
         }
+        .theme-platinum aside button[class~="border-transparent"],
+        .theme-platinum aside button[class*="bg-gradient-to"] {
+          background: linear-gradient(115deg, #dfe3e9, #ffffff 48%, #cbd2dc) !important;
+          color: #202733 !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 3px 12px rgba(45,55,70,.10) !important;
+        }
+        .theme-platinum ::selection { background: #d8dee7; color: #202733; }
         @media (prefers-reduced-motion: reduce) {
-          .theme-internal-operations::before,
-          .theme-internal-operations::after {
-            animation: none !important;
-          }
-          .theme-internal-operations *,
-          .theme-internal-operations *::before,
-          .theme-internal-operations *::after {
+          .theme-platinum::before,
+          .theme-platinum::after { animation: none !important; }
+          .theme-platinum *,
+          .theme-platinum *::before,
+          .theme-platinum *::after {
             scroll-behavior: auto !important;
-            transition-duration: 0.01ms !important;
+            transition-duration: .01ms !important;
+            animation-duration: .01ms !important;
+            animation-iteration-count: 1 !important;
           }
         }
 
