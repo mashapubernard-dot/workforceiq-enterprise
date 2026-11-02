@@ -10676,6 +10676,10 @@ export default function Home() {
             activeTab !==
               "Time & Attendance" &&
             activeTab !==
+              "Role & Permissions" &&
+            activeTab !==
+              "Authenticator Management" &&
+            activeTab !==
               "Schedules" &&
             activeTab !==
               "EOD Report" &&
