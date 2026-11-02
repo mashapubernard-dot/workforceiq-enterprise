@@ -23,7 +23,7 @@ export default function RolePermissionsPanel({ orgId, tabNames, onSaved }: Props
   const [savedRole, setSavedRole] = useState("");
 
   const manageableTabs = useMemo(
-    () => tabNames.filter((tab) => !["Tenant Management", "Platform Billing", "Role & Permissions"].includes(tab)),
+    () => tabNames.filter((tab) => !["Tenant Management", "Platform Billing", "Role & Permissions", "Authenticator Management"].includes(tab)),
     [tabNames]
   );
 
