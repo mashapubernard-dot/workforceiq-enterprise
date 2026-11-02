@@ -29,6 +29,40 @@ begin
  get diagnostics n=row_count; return n=1;
 end; $$;
 
+
+
+-- Atomically count failed TOTP attempts and enforce a five-minute lockout.
+create or replace function public.workforceiq_register_kiosk_totp_failure(
+  p_employee_id uuid,
+  p_org_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  is_locked boolean;
+begin
+  update public.workforceiq_kiosk_totp
+  set failed_attempts = case when failed_attempts + 1 >= 5 then 0 else failed_attempts + 1 end,
+      locked_until = case when failed_attempts + 1 >= 5 then now() + interval '5 minutes' else locked_until end,
+      updated_at = now()
+  where employee_id = p_employee_id
+    and org_id = p_org_id
+    and (locked_until is null or locked_until <= now())
+  returning (locked_until is not null and locked_until > now()) into is_locked;
+
+  if not found then
+    return true;
+  end if;
+  return coalesce(is_locked, false);
+end;
+$;
+
+revoke all on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.workforceiq_register_kiosk_totp_failure(uuid,uuid) to service_role;
+
 create or replace function public.workforceiq_kiosk_record_punch(p_employee_id uuid,p_org_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare open_id uuid; employee_name text; punch_time timestamptz:=now();
@@ -102,7 +136,7 @@ begin
   if p_latitude is null or p_longitude is null
      or p_latitude < -90 or p_latitude > 90
      or p_longitude < -180 or p_longitude > 180 then
-    raise exception 'Valid GPS coordinates are required to clock in';
+    return jsonb_build_object('error', 'Valid GPS coordinates are required to clock in. Enable location services and try again.');
   end if;
 
   select exists(
@@ -115,11 +149,11 @@ begin
     into site_row, distance_m
     from (
       select s as site_row,
-        6371000 * 2 * asin(sqrt(
+        6371000 * 2 * asin(sqrt(least(1::double precision, greatest(0::double precision,
           power(sin(radians(s.latitude - p_latitude) / 2), 2) +
           cos(radians(p_latitude)) * cos(radians(s.latitude)) *
           power(sin(radians(s.longitude - p_longitude) / 2), 2)
-        )) as calculated_distance
+        )))) as calculated_distance
       from public.workforce_sites s
       where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
     ) ranked
@@ -134,8 +168,11 @@ begin
         distance_m,site_row.radius_m,'OUTSIDE',
         'Clock-in blocked outside the configured geofence.'
       );
-      raise exception 'Clock-in blocked: you are %m from %. Allowed distance is %m.',
-        round(distance_m)::text, site_row.name, round(site_row.radius_m)::text;
+      return jsonb_build_object(
+        'error',
+        format('Clock-in blocked: you are %s m from %s. Allowed distance is %s m.',
+          round(distance_m)::text, site_row.name, round(coalesce(site_row.radius_m, 100))::text)
+      );
     end if;
   end if;
 
