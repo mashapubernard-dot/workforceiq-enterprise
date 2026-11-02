@@ -134,23 +134,27 @@ begin
   ) into has_sites;
 
   if has_sites then
-    select ranked.site_row, ranked.calculated_distance
-    into site_row, distance_m
-    from (
-      select s as site_row,
-        6371000 * 2 * asin(sqrt(least(1::double precision, greatest(0::double precision,
-          power(sin(radians(s.latitude - p_latitude) / 2), 2) +
-          cos(radians(p_latitude)) * cos(radians(s.latitude)) *
-          power(sin(radians(s.longitude - p_longitude) / 2), 2)
-        )))) as calculated_distance
-      from public.workforce_sites s
-      where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
-        and s.latitude between -90 and 90
-        and s.longitude between -180 and 180
-        and (s.radius_m is null or (s.radius_m > 0 and s.radius_m < 'Infinity'::double precision))
-    ) ranked
-    order by ranked.calculated_distance asc
+    select s.*
+    into site_row
+    from public.workforce_sites s
+    where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
+      and s.latitude between -90 and 90
+      and s.longitude between -180 and 180
+      and s.radius_m > 0 and s.radius_m < 'Infinity'::double precision
+    order by 6371000 * 2 * asin(sqrt(least(1::double precision, greatest(0::double precision,
+      power(sin(radians(s.latitude - p_latitude) / 2), 2) +
+      cos(radians(p_latitude)) * cos(radians(s.latitude)) *
+      power(sin(radians(s.longitude - p_longitude) / 2), 2)
+    )))) asc
     limit 1;
+
+    if found then
+      distance_m := 6371000 * 2 * asin(sqrt(least(1::double precision, greatest(0::double precision,
+        power(sin(radians(site_row.latitude - p_latitude) / 2), 2) +
+        cos(radians(p_latitude)) * cos(radians(site_row.latitude)) *
+        power(sin(radians(site_row.longitude - p_longitude) / 2), 2)
+      ))));
+    end if;
 
     if site_row.id is null then
       return jsonb_build_object('error', 'Your company work-site geofence is not configured correctly. Contact your administrator.');
