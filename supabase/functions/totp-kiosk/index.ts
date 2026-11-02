@@ -189,6 +189,10 @@ Deno.serve(async (req) => {
         p_geofence_status: null,
       });
       if (punchError) throw punchError;
+      await admin.from("workforceiq_kiosk_audit").insert({
+        org_id: actor.org_id, employee_id: employeeId, actor_id: actorId,
+        event_type: punch.action, details: { event_time: punch.event_time, method: "SELF_SERVICE_TOTP" },
+      });
       return json(punch);
     }
 
