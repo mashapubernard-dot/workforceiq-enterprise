@@ -111,16 +111,19 @@ begin
   ) into has_sites;
 
   if has_sites then
-    select s.*,
-      6371000 * 2 * asin(sqrt(
-        power(sin(radians(s.latitude - p_latitude) / 2), 2) +
-        cos(radians(p_latitude)) * cos(radians(s.latitude)) *
-        power(sin(radians(s.longitude - p_longitude) / 2), 2)
-      )) as calculated_distance
+    select ranked.site_row, ranked.calculated_distance
     into site_row, distance_m
-    from public.workforce_sites s
-    where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
-    order by calculated_distance asc
+    from (
+      select s as site_row,
+        6371000 * 2 * asin(sqrt(
+          power(sin(radians(s.latitude - p_latitude) / 2), 2) +
+          cos(radians(p_latitude)) * cos(radians(s.latitude)) *
+          power(sin(radians(s.longitude - p_longitude) / 2), 2)
+        )) as calculated_distance
+      from public.workforce_sites s
+      where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
+    ) ranked
+    order by ranked.calculated_distance asc
     limit 1;
 
     if distance_m > coalesce(site_row.radius_m, 100) then
