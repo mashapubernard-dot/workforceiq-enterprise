@@ -188,7 +188,8 @@ Deno.serve(async (req) => {
         p_accuracy_m: body.accuracy_m ?? null, p_site_id: null, p_distance_m: null,
         p_geofence_status: null,
       });
-      if (punchError) throw punchError;
+      if (punchError) return json({ error: "Attendance could not be recorded. Check your GPS location and work-site geofence, then try again." }, 403);
+      if (punch?.error) return json({ error: punch.error }, 403);
       await admin.from("workforceiq_kiosk_audit").insert({
         org_id: actor.org_id, employee_id: employeeId, actor_id: actorId,
         event_type: punch.action, details: { event_time: punch.event_time, method: "SELF_SERVICE_TOTP" },
