@@ -120,7 +120,8 @@ begin
 
   if p_latitude is null or p_longitude is null
      or p_latitude < -90 or p_latitude > 90
-     or p_longitude < -180 or p_longitude > 180 then
+     or p_longitude < -180 or p_longitude > 180
+     or (p_accuracy_m is not null and p_accuracy_m < 0) then
     return jsonb_build_object('error', 'Valid GPS coordinates are required to clock in. Enable location services and try again.');
   end if;
 
@@ -141,9 +142,15 @@ begin
         )))) as calculated_distance
       from public.workforce_sites s
       where s.org_id = p_org_id and s.enabled = true and s.enforce_geofence = true
+        and s.latitude between -90 and 90
+        and s.longitude between -180 and 180
     ) ranked
     order by ranked.calculated_distance asc
     limit 1;
+
+    if site_row.id is null then
+      return jsonb_build_object('error', 'Your company work-site geofence is not configured correctly. Contact your administrator.');
+    end if;
 
     if distance_m > coalesce(site_row.radius_m, 100) then
       insert into public.workforce_geofence_events(
