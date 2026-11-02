@@ -137,12 +137,11 @@ Deno.serve(async (req) => {
         const secret = await decryptSecret(row.pending_encrypted_secret);
         const step = await verifyTotp(secret, String(body.code || ""));
         if (step === null) {
-          const attempts = Number(row.failed_attempts || 0) + 1;
-          const update: Record<string, unknown> = { failed_attempts: attempts, updated_at: new Date().toISOString() };
-          if (attempts >= 5) { update.failed_attempts = 0; update.locked_until = new Date(Date.now() + 5 * 60_000).toISOString(); }
-          await admin.from("workforceiq_kiosk_totp").update(update).eq("employee_id", employeeId).eq("org_id", actor.org_id);
+          const { data: locked } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
+            p_employee_id: employeeId, p_org_id: actor.org_id,
+          });
           await admin.from("workforceiq_kiosk_audit").insert({ org_id: actor.org_id, employee_id: employeeId, actor_id: actorId, event_type: "ENROLLMENT_VERIFICATION_FAILED" });
-          return json({ error: attempts >= 5 ? "Too many incorrect codes. Wait five minutes or ask your administrator to restart setup." : "Code not accepted. Check the current six-digit code and try again." }, attempts >= 5 ? 429 : 400);
+          return json({ error: locked ? "Too many incorrect codes. Wait five minutes or ask your administrator to restart setup." : "Code not accepted. Check the current six-digit code and try again." }, locked ? 429 : 400);
         }
         const { error: saveError } = await admin.from("workforceiq_kiosk_totp").update({
           encrypted_secret: row.pending_encrypted_secret, pending_encrypted_secret: null,
@@ -171,12 +170,14 @@ Deno.serve(async (req) => {
       if (row.locked_until && new Date(row.locked_until).getTime() > Date.now()) return json({ error: "Too many attempts. Wait five minutes." }, 429);
       const step = await verifyTotp(await decryptSecret(row.encrypted_secret), String(body.code || ""));
       if (step === null) {
-        const attempts = Number(row.failed_attempts || 0) + 1;
-        await admin.from("workforceiq_kiosk_totp").update({
-          failed_attempts: attempts >= 5 ? 0 : attempts,
-          locked_until: attempts >= 5 ? new Date(Date.now() + 300000).toISOString() : null,
-        }).eq("employee_id", employeeId).eq("org_id", actor.org_id);
-        return json({ error: "Code not accepted." }, 401);
+        const { data: locked } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
+          p_employee_id: employeeId, p_org_id: actor.org_id,
+        });
+        await admin.from("workforceiq_kiosk_audit").insert({
+          org_id: actor.org_id, employee_id: employeeId, actor_id: actorId,
+          event_type: "AUTHENTICATION_FAILED", details: { method: "SELF_SERVICE_TOTP" },
+        });
+        return json({ error: locked ? "Too many attempts. Wait five minutes." : "Code not accepted." }, locked ? 429 : 401);
       }
       const { data: consumed, error: consumeError } = await admin.rpc("workforceiq_consume_kiosk_totp_step", {
         p_employee_id: employeeId, p_org_id: actor.org_id, p_step: step,
@@ -222,12 +223,11 @@ Deno.serve(async (req) => {
       const secret = await decryptSecret(row.encrypted_secret);
       const step = await verifyTotp(secret, String(body.code || ""));
       if (step === null) {
-        const attempts = Number(row.failed_attempts || 0) + 1;
-        const update: Record<string, unknown> = { failed_attempts: attempts, updated_at: new Date().toISOString() };
-        if (attempts >= 5) { update.failed_attempts = 0; update.locked_until = new Date(Date.now() + 5 * 60_000).toISOString(); }
-        await admin.from("workforceiq_kiosk_totp").update(update).eq("employee_id", employeeId).eq("org_id", actor.org_id);
+        const { data: locked } = await admin.rpc("workforceiq_register_kiosk_totp_failure", {
+          p_employee_id: employeeId, p_org_id: actor.org_id,
+        });
         await admin.from("workforceiq_kiosk_audit").insert({ org_id: actor.org_id, employee_id: employeeId, actor_id: actorId, event_type: "AUTHENTICATION_FAILED" });
-        return genericError();
+        return json({ error: locked ? "Too many attempts. Ask your administrator for help." : "Code not accepted. Check your authenticator and try again." }, locked ? 429 : 401);
       }
       const { data: consumed, error: consumeError } = await admin.rpc("workforceiq_consume_kiosk_totp_step", {
         p_employee_id: employeeId, p_org_id: actor.org_id, p_step: step,
@@ -240,7 +240,8 @@ Deno.serve(async (req) => {
         p_accuracy_m: typeof body.accuracy_m === "number" ? body.accuracy_m : null,
         p_site_id: null, p_distance_m: null, p_geofence_status: null,
       });
-      if (punchError) throw punchError;
+      if (punchError) return json({ error: "Attendance could not be recorded. Check the GPS location and work-site geofence, then try again." }, 403);
+      if (punch?.error) return json({ error: punch.error }, 403);
       await admin.from("workforceiq_kiosk_audit").insert({
         org_id: actor.org_id, employee_id: employeeId, actor_id: actorId,
         event_type: punch.action, details: { event_time: punch.event_time },
