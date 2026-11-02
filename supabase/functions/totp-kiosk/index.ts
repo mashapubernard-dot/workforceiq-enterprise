@@ -93,7 +93,9 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action || "");
-    const isAdmin = String(actor.role || "").toLowerCase() === "administrator";
+    const normalizeRole = (value: unknown) => String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+    const isPlatformRole = (value: unknown) => ["super admin", "platform super admin"].includes(normalizeRole(value));
+    const isAdmin = normalizeRole(actor.role) === "administrator";
 
     if (action === "start_enrollment" || action === "verify_enrollment" || action === "list_enrollments" || action === "revoke_enrollment") {
       if (!isAdmin) return json({ error: "Administrator access required" }, 403);
@@ -105,8 +107,9 @@ Deno.serve(async (req) => {
       }
       const employeeId = String(body.employee_id || "");
       const { data: employee, error: employeeError } = await admin.from("user_profiles")
-        .select("id,full_name,org_id").eq("id", employeeId).eq("org_id", actor.org_id).maybeSingle();
+        .select("id,full_name,org_id,role").eq("id", employeeId).eq("org_id", actor.org_id).maybeSingle();
       if (employeeError || !employee) return json({ error: "Employee is not in your company" }, 404);
+      if (isPlatformRole(employee.role)) return json({ error: "Platform administrator accounts cannot be enrolled for tenant attendance." }, 403);
 
       if (action === "start_enrollment") {
         const secret = makeSecret();
@@ -162,6 +165,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "self_clock") {
+      if (isPlatformRole(actor.role)) return json({ error: "Platform administrator accounts do not use tenant employee attendance." }, 403);
       const employeeId = actorId;
       const { data: row, error } = await admin.from("workforceiq_kiosk_totp")
         .select("encrypted_secret,failed_attempts,locked_until").eq("employee_id", employeeId)
@@ -207,14 +211,17 @@ Deno.serve(async (req) => {
       const ids = (enrolled || []).map((r: any) => r.employee_id);
       if (!ids.length) return json({ employees: [] });
       const { data: people, error: peopleError } = await admin.from("user_profiles")
-        .select("id,full_name").eq("org_id", actor.org_id).in("id", ids).order("full_name");
+        .select("id,full_name,role").eq("org_id", actor.org_id).in("id", ids).order("full_name");
       if (peopleError) throw peopleError;
-      return json({ employees: (people || []).map((p: any) => ({ id: p.id, name: p.full_name || "Employee" })) });
+      return json({ employees: (people || []).filter((p: any) => !isPlatformRole(p.role)).map((p: any) => ({ id: p.id, name: p.full_name || "Employee" })) });
     }
 
     if (action === "clock") {
       if (!isAdmin) return json({ error: "Company kiosk administrator sign-in required" }, 403);
       const employeeId = String(body.employee_id || "");
+      const { data: selectedEmployee, error: selectedEmployeeError } = await admin.from("user_profiles")
+        .select("id,role").eq("id", employeeId).eq("org_id", actor.org_id).maybeSingle();
+      if (selectedEmployeeError || !selectedEmployee || isPlatformRole(selectedEmployee.role)) return json({ error: "Employee is not eligible for tenant attendance." }, 403);
       const { data: row, error } = await admin.from("workforceiq_kiosk_totp")
         .select("encrypted_secret,failed_attempts,locked_until,last_used_step")
         .eq("employee_id", employeeId).eq("org_id", actor.org_id).not("enrolled_at", "is", null).maybeSingle();
